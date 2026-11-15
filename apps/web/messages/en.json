@@ -1,0 +1,221 @@
+{
+  "meta": {
+    "siteName": "HilaTech Knowledge Studio",
+    "title": "HilaTech Knowledge Studio — answers from your documents, with sources",
+    "description": "Turn business documents into a workspace where your team asks questions and checks every answer against its source.",
+    "demoTitle": "Demo workspace"
+  },
+  "common": {
+    "brandPrimary": "HilaTech",
+    "brandSecondary": "Knowledge Studio",
+    "skipToContent": "Skip to content",
+    "themeToLight": "Switch to light theme",
+    "themeToDark": "Switch to dark theme",
+    "switchLanguage": "Switch language: {language}",
+    "otherLanguage": "עברית",
+    "page": "Page {n}",
+    "pageOf": "Page {n} of {total}",
+    "section": "Section {n}",
+    "citation": "Source {n}: {title}, {locator}",
+    "samplePreview": "Sample preview"
+  },
+  "nav": {
+    "label": "Main",
+    "product": "Product",
+    "how": "How it works",
+    "useCases": "Use cases",
+    "demo": "Live demo",
+    "contact": "Contact",
+    "cta": "Try the live demo",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "menuTitle": "Menu"
+  },
+  "hero": {
+    "title": "Your knowledge, finally within reach.",
+    "body": "Turn documents into intelligent answers — backed by the sources your team can trust.",
+    "primary": "Try the live demo",
+    "secondary": "Explore the product",
+    "visualLabel": "Illustration: a question, its answer, and the two document passages the answer is based on.",
+    "question": "Question",
+    "answer": "Answer",
+    "visualNote": "Example built from the fictional sample documents in the demo."
+  },
+  "product": {
+    "title": "Ask a question. See where the answer comes from.",
+    "body": "Each statement in an answer points to the passage behind it. Choose a question, then select a citation to read the source.",
+    "questionsLabel": "Example questions",
+    "libraryLabel": "{company} knowledge library",
+    "note": "These answers are pre-written examples, shown to explain how the product works.",
+    "cta": "Open the demo workspace",
+    "sourceLabel": "Source"
+  },
+  "how": {
+    "title": "From a folder of files to an answer you can check.",
+    "steps": {
+      "add": {
+        "title": "Add your documents",
+        "body": "Upload PDFs, Word files and text files. Each one is read and indexed, and the library shows when it is ready to answer questions."
+      },
+      "ask": {
+        "title": "Ask meaningful questions",
+        "body": "Ask the way you would ask a colleague, in Hebrew or in English. Follow up without repeating yourself."
+      },
+      "verify": {
+        "title": "Verify every answer",
+        "body": "Open any citation to see the page and the exact passage it came from, next to the answer."
+      }
+    },
+    "vignette": {
+      "ready": "Ready",
+      "reading": "Reading",
+      "askPlaceholder": "Who approves a refund above $400?",
+      "verifyLocator": "Customer Support Handbook"
+    }
+  },
+  "useCases": {
+    "title": "One workspace, useful to every team.",
+    "body": "The same place to ask, whatever the documents are about.",
+    "teamHeader": "Team",
+    "questionHeader": "A question they might ask",
+    "items": {
+      "support": {
+        "team": "Customer support",
+        "body": "Agents answer policy questions inside the ticket, without waiting for a team lead.",
+        "question": "What is the refund window for annual plans?"
+      },
+      "hr": {
+        "team": "HR and onboarding",
+        "body": "New employees find answers on their own, and HR stops repeating them.",
+        "question": "What do I need to finish in my first week?"
+      },
+      "ops": {
+        "team": "Internal operations",
+        "body": "Procedures are easy to find at the moment someone needs them.",
+        "question": "Who approves a refund above $400?"
+      },
+      "docs": {
+        "team": "Technical documentation",
+        "body": "Engineers and support staff get the relevant section of a long manual.",
+        "question": "Which steps does the release checklist require before deployment?"
+      }
+    }
+  },
+  "trust": {
+    "title": "Built so you can check its work.",
+    "body": "An answer is only useful if you can rely on it. These are the rules the product is designed around.",
+    "items": {
+      "private": {
+        "title": "Private documents",
+        "body": "Files are kept in private storage and are used only to answer questions inside your own workspace."
+      },
+      "sources": {
+        "title": "Source-based answers",
+        "body": "Answers are written from passages found in your documents, and each statement links to the passage it relies on."
+      },
+      "access": {
+        "title": "Access controls",
+        "body": "Every workspace is separate. People see only the documents of the workspaces they belong to."
+      },
+      "unsupported": {
+        "title": "Unsupported questions",
+        "body": "When your documents don't cover a question, the assistant says so instead of guessing."
+      }
+    },
+    "example": {
+      "label": "When the documents don't have the answer",
+      "question": "What is our parental leave policy?",
+      "answer": "I couldn't find reliable information about that in the available documents.",
+      "meta": "No sources cited"
+    }
+  },
+  "contact": {
+    "title": "Ready to make your business knowledge searchable?",
+    "body": "Tell us what your team needs to find. HilaTech will get back to you to arrange a demo.",
+    "name": "Full name",
+    "email": "Work email",
+    "company": "Company",
+    "optional": "optional",
+    "message": "What would you like your team to be able to ask?",
+    "submit": "Request a demo",
+    "submitting": "Sending request",
+    "successTitle": "Request sent",
+    "successBody": "Thank you. Your request was received.",
+    "sendAnother": "Send another request",
+    "errors": {
+      "required": "Enter this field.",
+      "email": "Enter a valid email address, such as name@company.com.",
+      "tooLong": "Shorten this to {max} characters or fewer.",
+      "server": "Your request wasn't sent. Check your connection and try again.",
+      "rateLimited": "Too many requests from this device. Wait a minute and try again."
+    }
+  },
+  "footer": {
+    "tagline": "Your knowledge. Instant answers. Verified sources.",
+    "disclosure": "An independent demonstration product by HilaTech. Northstar Business Services and its documents are fictional.",
+    "navLabel": "Footer",
+    "rights": "© {year} HilaTech"
+  },
+  "workspace": {
+    "workspaceName": "Demo workspace",
+    "backToSite": "Back to site",
+    "navLabel": "Workspace",
+    "newChat": "New chat",
+    "history": "Sample conversations",
+    "library": "Knowledge library",
+    "openSidebar": "Open navigation",
+    "closeSidebar": "Close navigation",
+    "newConversation": "New conversation",
+    "you": "You",
+    "assistant": "Knowledge Studio",
+    "preview": {
+      "banner": "Answers on this screen are pre-written examples based on fictional documents. Live AI answers are not connected yet.",
+      "answerTag": "Pre-written sample answer"
+    },
+    "empty": {
+      "title": "What would you like to know?",
+      "body": "Ask about Northstar's policies, plans and procedures. Every answer shows the passages it is based on.",
+      "examples": "Try one of these questions",
+      "docs": "Documents in this workspace"
+    },
+    "composer": {
+      "label": "Your question",
+      "placeholder": "Ask about these documents",
+      "send": "Send question",
+      "stop": "Stop",
+      "hintSend": "to send",
+      "hintNewline": "for a new line"
+    },
+    "actions": {
+      "copy": "Copy answer",
+      "copied": "Copied",
+      "retry": "Retry",
+      "sources": "{count, plural, one {# source} other {# sources}}"
+    },
+    "followUps": "Related questions",
+    "stopped": "Stopped before the answer finished.",
+    "unavailable": {
+      "title": "This preview answers the example questions only",
+      "body": "Your question wasn't sent to an AI model, because live answers are not connected in this preview. Choose an example question to see how answers and sources work."
+    },
+    "evidence": {
+      "title": "Evidence",
+      "open": "Show evidence",
+      "close": "Close evidence",
+      "sourcesHeading": "Sources for this answer",
+      "documentHeading": "Document",
+      "fromDocument": "Quoted from the document",
+      "extracted": "Extracted text",
+      "previous": "Previous",
+      "next": "Next",
+      "notIncluded": "The text of this part of the document isn't included in the sample preview.",
+      "note": "The highlighted passage is quoted from the document. The answer in the conversation is a summary of it."
+    }
+  },
+  "notFound": {
+    "title": "This page doesn't exist",
+    "body": "The address may be mistyped, or the page may have moved.",
+    "home": "Go to the home page",
+    "demo": "Open the demo workspace"
+  }
+}

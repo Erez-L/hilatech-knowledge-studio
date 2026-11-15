@@ -1,0 +1,515 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant rtl (&:where([dir="rtl"], [dir="rtl"] *));
+
+/* -------------------------------------------------------------------------
+   1. Brand primitives — the fixed palette. Components never use these
+      directly; they use the semantic tokens in section 2.
+   ------------------------------------------------------------------------- */
+:root {
+  --ink-950: #0c1513;
+  --ink-900: #111d1a;
+  --ink-800: #172623; /* Deep Ink */
+  --ink-700: #1e332f;
+  --ink-600: #27413c;
+  --forest-600: #28594f; /* Forest */
+  --forest-500: #34705f;
+  --forest-300: #86c5b2;
+  --lime-400: #c7f36d; /* Signal Lime */
+  --lime-300: #d8f79a;
+  --lime-200: #e6fabf;
+  --porcelain: #f6f7f3;
+  --mist: #e4e9e3;
+  --white: #ffffff;
+
+  /* Spacing scale: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 (+ section rhythm) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-section: clamp(4.5rem, 3rem + 7vw, 9rem);
+  --gutter: clamp(1.25rem, 0.5rem + 3.2vw, 3.5rem);
+  --page-max: 82rem;
+
+  /* Radii carry hierarchy: paper is nearly square, controls are soft,
+     containers are softer. */
+  --radius-paper: 3px;
+  --radius-control: 0.625rem;
+  --radius-panel: 1rem;
+  --radius-stage: 1.5rem;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+
+  /* Fluid type scale */
+  --text-display: clamp(2.625rem, 1.5rem + 4.4vw, 4.625rem);
+  --text-h2: clamp(2rem, 1.35rem + 2.6vw, 3.25rem);
+  --text-h3: clamp(1.375rem, 1.2rem + 0.7vw, 1.75rem);
+  --text-app-title: clamp(1.75rem, 1.4rem + 1.2vw, 2.25rem);
+  --text-lead: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-label: 0.8125rem;
+
+  --leading-display: 0.98;
+  --leading-heading: 1.08;
+  --leading-body: 1.6;
+  --tracking-display: -0.035em;
+  --tracking-heading: -0.025em;
+}
+
+/* Hebrew sets taller and needs no negative tracking. */
+:root:lang(he) {
+  --leading-display: 1.08;
+  --leading-heading: 1.18;
+  --leading-body: 1.7;
+  --tracking-display: -0.01em;
+  --tracking-heading: 0em;
+}
+
+/* -------------------------------------------------------------------------
+   2. Semantic tokens — light theme
+   ------------------------------------------------------------------------- */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --background: var(--porcelain);
+  --surface: var(--white);
+  --surface-sunken: #eef1ec;
+  --surface-hover: var(--mist);
+  --paper: var(--white);
+
+  --foreground: var(--ink-800);
+  --text-secondary: #43544f;
+  --text-tertiary: #5c6b66;
+  --text-disabled: #98a49f;
+
+  --border: #d6ddd5;
+  --border-strong: #b4c0b7;
+
+  --primary: var(--ink-800);
+  --primary-hover: var(--ink-600);
+  --on-primary: var(--white);
+
+  --brand: var(--forest-600);
+  --brand-hover: #1f4840;
+
+  --accent: var(--lime-400);
+  --accent-hover: #b9ea54;
+  --on-accent: var(--ink-800);
+  --highlight: #dff8a8;
+  --highlight-strong: var(--lime-400);
+
+  --bubble: var(--ink-800);
+  --on-bubble: var(--white);
+
+  --focus: var(--forest-600);
+
+  --success: #23694c;
+  --success-surface: #e2f1e8;
+  --warning: #8a5300;
+  --warning-surface: #fbefd6;
+  --danger: #a8322b;
+  --danger-surface: #fbe7e4;
+
+  --logo-page: var(--ink-800);
+
+  --stage: var(--ink-800);
+  --stage-raised: var(--ink-700);
+  --stage-border: #2f4a44;
+  --on-stage: #eef2ec;
+  --on-stage-muted: #a6b6af;
+
+  --shadow-raised: 0 1px 0 rgb(23 38 35 / 0.04), 0 10px 28px -14px rgb(23 38 35 / 0.22);
+  --shadow-float: 0 2px 4px rgb(23 38 35 / 0.05), 0 28px 60px -24px rgb(23 38 35 / 0.32);
+  --rule-line: rgb(23 38 35 / 0.055);
+}
+
+/* -------------------------------------------------------------------------
+   3. Semantic tokens — dark theme. Designed on its own: a deep green-black
+      reading room, where lime becomes the primary action colour and paper
+      turns into a lit surface instead of an inverted white.
+   ------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #0e1816;
+  --surface: #14211e;
+  --surface-sunken: #0b1412;
+  --surface-hover: #1c2e2a;
+  --paper: #192925;
+
+  --foreground: #ebf0e9;
+  --text-secondary: #afbdb6;
+  --text-tertiary: #8a9a93;
+  --text-disabled: #55655f;
+
+  --border: #263a35;
+  --border-strong: #3b544d;
+
+  --primary: var(--lime-400);
+  --primary-hover: var(--lime-300);
+  --on-primary: var(--ink-900);
+
+  --brand: var(--forest-300);
+  --brand-hover: #a5d8c8;
+
+  --accent: var(--lime-400);
+  --accent-hover: var(--lime-300);
+  --on-accent: var(--ink-900);
+  --highlight: rgb(199 243 109 / 0.2);
+  --highlight-strong: var(--lime-400);
+
+  --bubble: #223a34;
+  --on-bubble: #ebf0e9;
+
+  --focus: var(--lime-400);
+
+  --success: #7fd3a8;
+  --success-surface: #15302a;
+  --warning: #f0c069;
+  --warning-surface: #33290f;
+  --danger: #f29a90;
+  --danger-surface: #3a1c19;
+
+  --logo-page: #2a4640;
+
+  --stage: #080f0e;
+  --stage-raised: #111c1a;
+  --stage-border: #223530;
+  --on-stage: #ebf0e9;
+  --on-stage-muted: #94a49d;
+
+  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.02), 0 12px 32px -16px rgb(0 0 0 / 0.7);
+  --shadow-float: 0 0 0 1px rgb(255 255 255 / 0.03), 0 32px 64px -24px rgb(0 0 0 / 0.8);
+  --rule-line: rgb(235 240 233 / 0.045);
+}
+
+/* -------------------------------------------------------------------------
+   4. Tailwind theme — utilities resolve to semantic tokens only.
+   ------------------------------------------------------------------------- */
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-sunken: var(--surface-sunken);
+  --color-hover: var(--surface-hover);
+  --color-paper: var(--paper);
+  --color-foreground: var(--foreground);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+  --color-disabled: var(--text-disabled);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-highlight: var(--highlight);
+  --color-highlight-strong: var(--highlight-strong);
+  --color-bubble: var(--bubble);
+  --color-on-bubble: var(--on-bubble);
+  --color-focus: var(--focus);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-stage: var(--stage);
+  --color-stage-raised: var(--stage-raised);
+  --color-stage-border: var(--stage-border);
+  --color-on-stage: var(--on-stage);
+  --color-on-stage-muted: var(--on-stage-muted);
+
+  --font-sans: var(--font-jakarta), var(--font-heebo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), var(--font-heebo), ui-monospace, "SFMono-Regular", monospace;
+
+  --text-display: var(--text-display);
+  --text-h2: var(--text-h2);
+  --text-h3: var(--text-h3);
+  --text-app-title: var(--text-app-title);
+  --text-lead: var(--text-lead);
+  --text-body: var(--text-body);
+  --text-small: var(--text-small);
+  --text-label: var(--text-label);
+
+  --radius-paper: var(--radius-paper);
+  --radius-control: var(--radius-control);
+  --radius-panel: var(--radius-panel);
+  --radius-stage: var(--radius-stage);
+
+  --shadow-raised: var(--shadow-raised);
+  --shadow-float: var(--shadow-float);
+
+  --ease-out: var(--ease-out);
+  --ease-in-out: var(--ease-in-out);
+
+  --breakpoint-xs: 26rem;
+  --breakpoint-wide: 75rem;
+}
+
+/* -------------------------------------------------------------------------
+   5. Base
+   ------------------------------------------------------------------------- */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+    scroll-padding-block-start: 5.5rem;
+    scrollbar-color: var(--border-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  body {
+    min-block-size: 100dvh;
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    overflow-x: clip;
+  }
+
+  /* The theme change itself is the one place colours animate together. */
+  html.theme-switching *,
+  html.theme-switching *::before,
+  html.theme-switching *::after {
+    transition:
+      background-color var(--dur-slow) var(--ease-in-out),
+      border-color var(--dur-slow) var(--ease-in-out),
+      color var(--dur-slow) var(--ease-in-out),
+      fill var(--dur-slow) var(--ease-in-out),
+      stroke var(--dur-slow) var(--ease-in-out) !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--highlight-strong);
+    color: var(--ink-900);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* Scrollbars inside panels: thin and quiet until needed. */
+  .scroll-quiet {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    overscroll-behavior: contain;
+  }
+  .scroll-quiet:hover,
+  .scroll-quiet:focus-within {
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------
+   6. Signature pieces — things that are part of the identity rather than
+      one-off utilities.
+   ------------------------------------------------------------------------- */
+@layer components {
+  .page-container {
+    inline-size: 100%;
+    max-inline-size: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+  }
+
+  .type-display {
+    text-wrap: wrap;
+    font-size: var(--text-display);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+    font-weight: 800;
+  }
+  .type-h2 {
+    font-size: var(--text-h2);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-heading);
+    font-weight: 700;
+  }
+  .type-h3 {
+    font-size: var(--text-h3);
+    line-height: 1.2;
+    letter-spacing: var(--tracking-heading);
+    font-weight: 700;
+  }
+  .type-lead {
+    font-size: var(--text-lead);
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+  /* Technical label: page numbers, file facts, keyboard hints. */
+  .type-meta {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    font-feature-settings: "zero";
+  }
+
+  /* The highlighter. Evidence is always marked this way, everywhere. */
+  .mark-evidence {
+    background-color: transparent; /* override the browser default for <mark> */
+    background-image: linear-gradient(var(--highlight), var(--highlight));
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    background-position: 0 0;
+    color: var(--foreground);
+    padding-block: 0.12em;
+    padding-inline: 0.08em;
+    margin-inline: -0.08em;
+    border-radius: 2px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  [dir="rtl"] .mark-evidence {
+    background-position: 100% 0;
+  }
+  .mark-evidence[data-active="true"] {
+    background-image: linear-gradient(var(--highlight-strong), var(--highlight-strong));
+    color: var(--ink-900);
+  }
+  .mark-evidence[data-sweep="pending"] {
+    background-size: 0% 100%;
+  }
+  .mark-evidence[data-sweep] {
+    transition: background-size 700ms var(--ease-out);
+  }
+
+  /* A page of a document: nearly square corners, ruled faintly like paper. */
+  .paper {
+    background-color: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-paper);
+    box-shadow: var(--shadow-raised);
+  }
+
+  /* Faint ruled ground used behind the hero and the workspace empty state. */
+  .ruled-ground {
+    background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule-line) 100%);
+    background-size: 100% 2rem;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      100deg,
+      var(--surface-sunken) 30%,
+      var(--surface-hover) 50%,
+      var(--surface-sunken) 70%
+    );
+    background-size: 220% 100%;
+    animation: skeleton-slide 1.4s var(--ease-in-out) infinite;
+    border-radius: 4px;
+  }
+  @keyframes skeleton-slide {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+}
+
+@layer utilities {
+  .bidi-isolate {
+    unicode-bidi: isolate;
+  }
+  /* Filenames, emails and numbers read left-to-right inside Hebrew text. */
+  .ltr-run {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+  .truncate-start {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-inline-size: 0;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   7. Keyframes for overlays. Inline-direction motion flips in RTL.
+   ------------------------------------------------------------------------- */
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+/* --dir is 1 in LTR and -1 in RTL, so "start" and "end" slide correctly. */
+:root { --dir: 1; }
+[dir="rtl"] { --dir: -1; }
+@keyframes sheet-in-start {
+  from { translate: calc(-100% * var(--dir)) 0; }
+}
+@keyframes sheet-out-start {
+  to { translate: calc(-100% * var(--dir)) 0; }
+}
+@keyframes sheet-in-end {
+  from { translate: calc(100% * var(--dir)) 0; }
+}
+@keyframes sheet-out-end {
+  to { translate: calc(100% * var(--dir)) 0; }
+}
+@keyframes sheet-in-bottom {
+  from { translate: 0 100%; }
+}
+@keyframes sheet-out-bottom {
+  to { translate: 0 100%; }
+}
+@keyframes sheet-in-top {
+  from { translate: 0 -100%; opacity: 0; }
+}
+@keyframes sheet-out-top {
+  to { translate: 0 -100%; opacity: 0; }
+}
+@keyframes block-in {
+  from { opacity: 0; translate: 0 6px; }
+}
