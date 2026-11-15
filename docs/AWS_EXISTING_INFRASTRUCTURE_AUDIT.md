@@ -103,3 +103,66 @@ Open code issues that the run is expected to touch are listed in `docs/MILESTONE
 - **Claude model of the SaaS: still [Unverified].** It is not in IAM, Parameter Store or any other configuration visible in the console. Cost Explorer, filtered to Amazon Bedrock and grouped by usage type for May to October 2026, showed no Claude usage type; the SaaS server was created on 13 November, after that range, so this says nothing about the SaaS. The value has to be read from the SaaS application's own configuration (`LLM`/model setting on the server or in its repository). A model ID is not a secret.
 - **Two roles on one EC2 instance are not possible [Doc]:** an instance has one instance profile, and a profile holds one role. If both applications ever share the instance, the instance role should hold only `sts:AssumeRole` on two application roles, and each application assumes its own (`hilatech-saas-app`, `hilatech-knowledge-studio-app`) through the AWS SDK's `role_arn` + `credential_source = Ec2InstanceMetadata` profile. This separates permissions and audit trails, but not the applications from each other at the operating-system level: any process on the instance can reach the metadata service and assume either role. Real isolation needs separate instances or container task roles (ECS).
 - **The three code fixes named in section 7 are not implemented yet [Repo]:** the embeddings length guard still counts characters, the daily token budget is not checked before ingestion, and the S3 adapter does not map a 403 for a missing object. They are listed as open in `docs/MILESTONE_2_PLAN.md`.
+
+## 9. Approved setup plan (approved by the owner on 2026-11-15; NOT YET EXECUTED)
+
+Nothing in this section exists in AWS yet. It records the owner's decisions and the exact resources to create, so the setup can be carried out and checked step by step.
+
+**Decisions.** Same account, Region us-east-1. Chat model: Claude Haiku 5.5, subject to verifying its exact Bedrock model ID, inference profile, availability and price in this account **[Unverified]**. Embeddings: `cohere.embed-multilingual-v3`, 1024 dimensions. Runtime identity for verification: **IAM Identity Center**, temporary credentials on the owner's machine through `aws sso login`. No access keys. The SaaS role, server and buckets are not touched. No EC2, RDS, ECS or ElastiCache.
+
+**Preconditions, in order.**
+1. MFA is enabled on `erez-admin` (IAM → Users → erez-admin → Security credentials). If it is not, stop.
+2. Identity Center is managed from this account or its organization's management account, and the owner's Identity Center user can be assigned to account `590184083649` **[Unverified]**. If Identity Center is managed elsewhere, stop and ask.
+3. In the Bedrock model catalog (us-east-1): the Haiku 5.5 model ID and the ID and ARN of its inference profile; whether it is a `us.` or `global.` profile, and the Regions it routes to.
+
+**Resources to create.**
+
+| # | Resource | Specification |
+|---|---|---|
+| 1 | Identity Center permission set `KnowledgeStudioApp` | Session 1 hour. No AWS managed policies. Inline policy below. Assigned to the owner's Identity Center user for account `590184083649`. Identity Center creates the IAM role `AWSReservedSSO_KnowledgeStudioApp_*` itself; that role is the dedicated least-privilege role, and its trust policy (the account's Identity Center SAML provider) is written by AWS |
+| 2 | S3 bucket `hilatech-knowledge-studio-docs-590184083649` | us-east-1. Block Public Access: all four settings on. Default encryption SSE-S3. ACLs disabled (bucket owner enforced). Versioning off. No bucket policy. Tag `project=knowledge-studio` |
+| 3 | Budget `knowledge-studio-bedrock` | Cost budget, monthly, $10, filtered to service Amazon Bedrock. Email alerts at 50% and 80% of actual spend. No actions (so it is free). Note: the filter covers all Bedrock use in the account, the SaaS included; Bedrock on-demand usage cannot be split per application without application inference profiles |
+
+**Inline policy for the permission set** (replace the two placeholders after precondition 3):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeTheTwoModels",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": [
+        "arn:aws:bedrock:us-east-1::foundation-model/cohere.embed-multilingual-v3",
+        "<ARN of the Haiku 5.5 inference profile in account 590184083649>",
+        "arn:aws:bedrock:*::foundation-model/<Haiku 5.5 model ID>"
+      ]
+    },
+    {
+      "Sid": "DocumentObjects",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::hilatech-knowledge-studio-docs-590184083649/*"
+    },
+    {
+      "Sid": "SoAMissingObjectIsReportedAsMissing",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::hilatech-knowledge-studio-docs-590184083649"
+    }
+  ]
+}
+```
+
+The third Bedrock resource uses `*` for the Region because a cross-Region inference profile forwards the request to the foundation model in whichever Region serves it **[Doc]**; narrow it to the profile's Regions once they are known. The first invocation of each model may also need AWS Marketplace permissions that this policy does not grant **[Doc]**: the owner makes that first call once as administrator, when paid calls are approved.
+
+**Checks after creation (none of them invokes a model).**
+- IAM policy simulator, or the role's Permissions tab: the role allows the two Bedrock actions on the two models only, and S3 on this bucket only; it has no SSM, SES, IAM or EC2 permission.
+- Bucket → Permissions: Block Public Access on, no policy, "Bucket and objects not public". Properties: default encryption on.
+- Budgets: the new budget is listed with two alert thresholds and a confirmed email recipient.
+- `aws sso login` followed by `aws sts get-caller-identity` on the owner's machine shows the `AWSReservedSSO_KnowledgeStudioApp_*` role.
+
+**Environment for the verification run** (values, no secrets): `AWS_PROFILE=<the sso profile>`, `AWS_REGION=us-east-1`, `LLM_PROVIDER=bedrock`, `LLM_MODEL_ID=<inference profile ID>`, `EMBEDDINGS_PROVIDER=bedrock-cohere`, `EMBEDDINGS_MODEL_ID=cohere.embed-multilingual-v3`, `STORAGE_DRIVER=s3`, `S3_BUCKET=hilatech-knowledge-studio-docs-590184083649`, `BUDGET_DAILY_INPUT_TOKENS=200000`, `BUDGET_DAILY_OUTPUT_TOKENS=20000`. Then the order in section 7. Paid calls need a separate approval.
+
+**Expected additional cost of the setup itself:** none. A permission set, an empty bucket and a budget without actions are not charged.
