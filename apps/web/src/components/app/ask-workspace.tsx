@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { api, ApiError, type DocumentView, type MessageView, type SourceView } from "@/lib/api";
+import { ApiError, type DocumentView, type MessageView, type SourceView } from "@/lib/api";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { LogoMark } from "@/components/shared/logo";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ export function AskWorkspace() {
   const requested = useSearchParams().get("c");
   const reduceMotion = useReducedMotion();
   const inlineEvidence = useMediaQuery("(min-width: 48rem)");
-  const { me, conversations, refreshConversations, handleAuthError } = useApp();
+  const { api, scope, homePath, me, conversations, refreshConversations, handleAuthError } = useApp();
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -84,10 +84,11 @@ export function AskWorkspace() {
   const busy = messages.some((m) => m.role === "assistant" && m.status === "streaming");
   const title = conversations?.find((c) => c.id === conversationId)?.title ?? null;
   const answering = me?.pipeline.answering ?? true;
+  const sessionReady = scope === "app" || me !== null;
 
   const refreshUsage = useCallback(() => {
     api.usage().then((u) => setUsage({ used: u.today.questions, limit: u.limits.questionsPerDay })).catch(() => {});
-  }, []);
+  }, [api]);
 
   // Load the conversation named in the URL (or reset for a new chat).
   useEffect(() => {
@@ -100,6 +101,8 @@ export function AskWorkspace() {
       setLoading(false);
       return;
     }
+    // The demo's anonymous session starts with the status request; wait for it before asking for a conversation.
+    if (!sessionReady) return;
     const controller = new AbortController();
     setLoading(true);
     api
@@ -111,19 +114,20 @@ export function AskWorkspace() {
       })
       .catch((error) => {
         if (controller.signal.aborted || handleAuthError(error)) return;
-        router.replace("/app"); // gone, or not ours
+        setLoading(false); // show the empty workspace rather than a skeleton that never resolves
+        router.replace(homePath); // gone, or not ours
       });
     return () => controller.abort();
     // conversationId is intentionally not a dependency: it changes when WE start a conversation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requested, handleAuthError, router]);
+  }, [requested, sessionReady, handleAuthError, router, api, homePath]);
 
   useEffect(() => {
     const controller = new AbortController();
     api.documents("", controller.signal).then(setDocuments).catch(() => setDocuments([]));
     refreshUsage();
     return () => controller.abort();
-  }, [refreshUsage]);
+  }, [api, refreshUsage]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -218,6 +222,9 @@ export function AskWorkspace() {
           {me?.pipeline.mode === "sample" && (
             <span className="type-meta shrink-0 rounded-full bg-warning-surface px-2.5 py-1 font-medium text-warning">{t("mode.sampleBadge")}</span>
           )}
+          {scope === "demo" && (
+            <span className="type-meta shrink-0 rounded-full border border-border-strong px-2.5 py-1 font-medium text-secondary">{t("demo.badge")}</span>
+          )}
           <span className="flex-1" />
           {hasEvidence && (
             <Button
@@ -249,7 +256,14 @@ export function AskWorkspace() {
               <span className="skeleton h-4 w-2/3" />
             </div>
           ) : messages.length === 0 ? (
-            <EmptyState ready={ready} processing={processing.length} loaded={documents !== null} unconfigured={me !== null && !answering} />
+            <EmptyState
+              ready={ready}
+              processing={processing.length}
+              loaded={documents !== null}
+              unconfigured={me !== null && !answering}
+              demo={scope === "demo"}
+              onAsk={send}
+            />
           ) : (
             <ol className="mx-auto flex w-full max-w-[46rem] flex-col gap-8 py-8">
               {messages.map((message) => (
@@ -282,7 +296,13 @@ export function AskWorkspace() {
             onSend={send}
             onStop={stop}
             disabled={!answering}
-            footnote={usage && answering ? t("chat.usage", { used: usage.used, limit: usage.limit }) : undefined}
+            footnote={
+              scope === "demo" && me
+                ? t("demo.usage", { limit: me.limits.questionsPerDay })
+                : usage && answering
+                  ? t("chat.usage", { used: usage.used, limit: usage.limit })
+                  : undefined
+            }
           />
         </div>
       </main>
@@ -323,8 +343,23 @@ export function AskWorkspace() {
   );
 }
 
-function EmptyState({ ready, processing, loaded, unconfigured }: { ready: DocumentView[]; processing: number; loaded: boolean; unconfigured: boolean }) {
+function EmptyState({
+  ready,
+  processing,
+  loaded,
+  unconfigured,
+  demo,
+  onAsk,
+}: {
+  ready: DocumentView[];
+  processing: number;
+  loaded: boolean;
+  unconfigured: boolean;
+  demo: boolean;
+  onAsk: (question: string) => void;
+}) {
   const t = useTranslations("app");
+  const suggestions = demo ? (["refund", "priority", "onboarding", "plans"] as const) : [];
   if (unconfigured) {
     return (
       <div className="mx-auto flex w-full max-w-[46rem] flex-1 flex-col justify-center py-10">
@@ -343,9 +378,9 @@ function EmptyState({ ready, processing, loaded, unconfigured }: { ready: Docume
     <div className="ruled-ground -mx-4 flex flex-1 flex-col px-4 sm:-mx-8 sm:px-8">
       <div className="mx-auto flex w-full max-w-[46rem] flex-1 flex-col justify-center py-10">
         <h1 className="text-app-title leading-(--leading-heading) font-extrabold tracking-(--tracking-heading)">
-          {noDocuments ? t("empty.noDocsTitle") : t("empty.title")}
+          {demo ? t("demo.emptyTitle") : noDocuments ? t("empty.noDocsTitle") : t("empty.title")}
         </h1>
-        <p className="type-lead mt-3 max-w-[36rem]">{noDocuments ? t("empty.noDocsBody") : t("empty.body")}</p>
+        <p className="type-lead mt-3 max-w-[36rem]">{demo ? t("demo.emptyBody") : noDocuments ? t("empty.noDocsBody") : t("empty.body")}</p>
 
         {!loaded ? (
           <div className="mt-10 flex flex-col gap-3" aria-hidden>
@@ -363,9 +398,30 @@ function EmptyState({ ready, processing, loaded, unconfigured }: { ready: Docume
           </div>
         ) : (
           <div className="mt-10">
+            {suggestions.length > 0 && (
+              <>
+                <h2 className="mb-3 text-label font-semibold text-tertiary">{t("demo.suggestionsTitle")}</h2>
+                <ul className="mb-10 border-b border-border">
+                  {suggestions.map((key) => (
+                    <li key={key} className="border-t border-border">
+                      <button
+                        type="button"
+                        data-suggested-question={key}
+                        onClick={() => onAsk(t(`demo.suggestions.${key}`))}
+                        className="group w-full py-4 text-start text-[1.0625rem] leading-snug font-semibold"
+                      >
+                        <span className="mark-evidence bg-size-[0%_100%]! transition-[background-size] duration-300 ease-out group-hover:bg-size-[100%_100%]! group-focus-visible:bg-size-[100%_100%]!">
+                          {t(`demo.suggestions.${key}`)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             <h2 className="mb-3 text-label font-semibold text-tertiary">{t("empty.docsReady", { count: ready.length })}</h2>
             <ul className="border-b border-border">
-              {ready.slice(0, 6).map((doc) => (
+              {ready.slice(0, demo ? 12 : 6).map((doc) => (
                 <li key={doc.id} dir="auto" className="flex items-baseline justify-between gap-6 border-t border-border py-3 text-[0.9375rem] font-semibold">
                   <span className="truncate-start">{doc.title}</span>
                   <span className="type-meta shrink-0 font-normal text-tertiary uppercase">{doc.fileType}</span>
@@ -404,6 +460,15 @@ function Answer({
   const errorKey = (["rate_limited", "budget_exceeded", "provider_not_configured", "provider_error", "unauthenticated", "not_found"] as const).find(
     (code) => code === message.errorCode,
   );
+  const { scope } = useApp();
+  const errorText =
+    scope === "demo" && errorKey === "budget_exceeded"
+      ? t("demo.limitReached")
+      : errorKey
+        ? t(`chat.errors.${errorKey}`)
+        : message.errorCode
+          ? t("chat.errors.generic")
+          : t("chat.failed");
 
   const copy = async () => {
     try {
@@ -465,7 +530,7 @@ function Answer({
       {message.status === "failed" && (
         <div role="alert" className="mt-4 flex flex-wrap items-center gap-3 rounded-control border border-danger/40 bg-danger-surface px-4 py-3 text-small text-danger">
           <TriangleAlert className="size-4 shrink-0" aria-hidden />
-          <span className="flex-1">{errorKey ? t(`chat.errors.${errorKey}`) : message.errorCode ? t("chat.errors.generic") : t("chat.failed")}</span>
+          <span className="flex-1">{errorText}</span>
           {onRetry && (
             <Button variant="outline" size="sm" onClick={onRetry}>
               <RotateCcw className="rtl:-scale-x-100" aria-hidden />

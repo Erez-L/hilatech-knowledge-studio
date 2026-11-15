@@ -108,7 +108,8 @@ liveSuite(gate, () => {
     // The fact is on page 7 of the handbook. A passage can span pages, and a citation shows only the
     // passage's FIRST page, so the hard check is that a cited passage covers page 7 and contains the
     // sentence; whether the page shown to the user is exactly 7 is recorded as an observation.
-    const fromHandbook = result.done!.sources.filter((s) => s.documentTitle === "customer-support-handbook");
+    // Matched by document ID: titles are display text derived from the file name and may change.
+    const fromHandbook = result.done!.sources.filter((s) => s.documentId === documents[0]!.id);
     const covering = fromHandbook.filter((s) => {
       const passage = saved.passageOf(s.chunkId);
       return passage !== null && pageInRange(7, passage) && passage.text.includes("first response within 30 minutes");

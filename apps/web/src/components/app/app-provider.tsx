@@ -2,9 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "@/i18n/navigation";
-import { api, ApiError, type ConversationView, type Me } from "@/lib/api";
+import { ApiError, createApi, type Api, type ConversationView, type Me, type Scope } from "@/lib/api";
 
 type AppState = {
+  /** "app": signed-in application. "demo": public, read-only demo tenant. */
+  scope: Scope;
+  api: Api;
+  /** Where "new chat" and a missing conversation lead. */
+  homePath: "/app" | "/demo";
   me: Me | null;
   /** null while loading. */
   conversations: ConversationView[] | null;
@@ -22,20 +27,34 @@ export function useApp(): AppState {
   return value;
 }
 
-export function AppProvider({ children }: { children: ReactNode }) {
+export function AppProvider({ children, scope = "app" }: { children: ReactNode; scope?: Scope }) {
   const router = useRouter();
+  const api = useMemo(() => createApi(scope), [scope]);
+  const homePath = scope === "demo" ? "/demo" : "/app";
   const [me, setMe] = useState<Me | null>(null);
   const [conversations, setConversations] = useState<ConversationView[] | null>(null);
 
   const handleAuthError = useCallback(
     (error: unknown) => {
       if (error instanceof ApiError && error.status === 401) {
-        router.replace("/sign-in");
+        // App: the session ended. Demo: the anonymous session expired; reloading issues a new one.
+        if (scope === "demo") {
+          // At most one reload per minute, so a session that cannot be issued never loops.
+          try {
+            const last = Number(window.sessionStorage.getItem("hks-demo-reload") ?? 0);
+            if (Date.now() - last > 60_000) {
+              window.sessionStorage.setItem("hks-demo-reload", String(Date.now()));
+              window.location.reload();
+            }
+          } catch {
+            /* storage unavailable: stay on the page */
+          }
+        } else router.replace("/sign-in");
         return true;
       }
       return false;
     },
-    [router],
+    [router, scope],
   );
 
   const refreshConversations = useCallback(async () => {
@@ -44,14 +63,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       if (!handleAuthError(error)) setConversations((current) => current ?? []);
     }
-  }, [handleAuthError]);
+  }, [api, handleAuthError]);
 
   const removeConversation = useCallback(
     async (id: string) => {
       await api.deleteConversation(id);
       setConversations((current) => current?.filter((c) => c.id !== id) ?? null);
     },
-    [],
+    [api],
   );
 
   useEffect(() => {
@@ -66,11 +85,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshConversations();
     return () => controller.abort();
-  }, [handleAuthError, refreshConversations]);
+  }, [api, handleAuthError, refreshConversations]);
 
   const value = useMemo(
-    () => ({ me, conversations, refreshConversations, removeConversation, handleAuthError }),
-    [me, conversations, refreshConversations, removeConversation, handleAuthError],
+    () => ({ scope, api, homePath: homePath as "/app" | "/demo", me, conversations, refreshConversations, removeConversation, handleAuthError }),
+    [scope, api, homePath, me, conversations, refreshConversations, removeConversation, handleAuthError],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

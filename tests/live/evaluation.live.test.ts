@@ -6,7 +6,7 @@
  * It REPORTS quality numbers (artifacts/evaluation/*.json and *.md). It fails only on safety
  * invariants: a delivered citation to a label that was not supplied, a source from another
  * tenant, or an answer not saved with pipeline_mode = 'live'.
- * One chat call at most per question; MAX_QUESTIONS caps the run (default 40).
+ * One chat call at most per question; MAX_QUESTIONS caps the run (default 50).
  * See docs/REAL_PROVIDER_VERIFICATION.md, steps 11 to 13.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -46,7 +46,7 @@ type EvaluationItem = {
 /** The evaluation set. EVALUATION_QUESTIONS_FILE may point at another file with the same shape (for example a draft set). */
 const QUESTIONS_FILE = path.resolve(REPO_ROOT, optionalEnv("EVALUATION_QUESTIONS_FILE") ?? path.join("samples", "evaluation", "questions.json"));
 const REPORT_DIR = path.join(REPO_ROOT, "artifacts", "evaluation");
-const DEFAULT_MAX_QUESTIONS = 40;
+const DEFAULT_MAX_QUESTIONS = 50;
 
 const gate = liveGate(
   "Evaluation set with real providers",
@@ -110,6 +110,7 @@ type Row = {
   bestExpectedRank: number | null;
   correctRefusal: boolean | null;
   documentMatch: boolean | null;
+  allDocumentsMatch: boolean | null;
   /** The page shown by a citation (the passage's first page) equals the expected page, and the section matches. */
   locationMatch: boolean | null;
   /** The expected page lies within the cited passage's page range, and the section matches. */
@@ -243,6 +244,8 @@ if (gate.enabled && gate.missing.length === 0 && !existsSync(QUESTIONS_FILE)) {
       const rangeHit = (source: ExpectedSource, passage: { pageNumber: number | null; pageEnd: number | null; sectionPath: string[] | null }) =>
         (source.page === undefined || pageInRange(source.page, passage)) && sectionHit(source, passage.sectionPath);
       const documentMatch = sources.some((cited) => expectedIds.some((e) => e.documentId === cited.documentId));
+      // For questions that need several documents: every expected document (same edition) is cited.
+      const allDocumentsMatch = expectedIds.every((e) => sources.some((cited) => cited.documentId === e.documentId));
       const locationMatch = sources.some((cited) => expectedIds.some((e) => e.documentId === cited.documentId && shownHit(e.source, cited.pageNumber, cited.sectionPath)));
       const locationRangeMatch = sources.some((cited) => {
         const passage = saved?.passageOf(cited.chunkId) ?? { pageNumber: cited.pageNumber, pageEnd: null, sectionPath: cited.sectionPath };
@@ -260,6 +263,7 @@ if (gate.enabled && gate.missing.length === 0 && !existsSync(QUESTIONS_FILE)) {
         bestExpectedRank: expectedCandidates[0]?.rank ?? null,
         correctRefusal: item.expected.answerable ? null : refused,
         documentMatch: item.expected.answerable && item.expected.sources.length ? documentMatch : null,
+        allDocumentsMatch: item.expected.answerable && item.expected.sources.length ? allDocumentsMatch : null,
         locationMatch: item.expected.answerable && item.expected.sources.length ? locationMatch : null,
         locationRangeMatch: item.expected.answerable && item.expected.sources.length ? locationRangeMatch : null,
         mustContainAll: item.expected.mustContain.length ? missingTerms.length === 0 : null,
@@ -313,6 +317,7 @@ type Totals = {
   uncited: number;
   withExpectedSources: number;
   documentMatches: number;
+  allDocumentsMatches: number;
   locationMatches: number;
   locationRangeMatches: number;
   withMustContain: number;
@@ -340,6 +345,7 @@ function aggregate(rows: Row[]): Totals[] {
     uncited: count(list, (r) => r.answerStatus === "uncited"),
     withExpectedSources: count(list, (r) => r.documentMatch !== null),
     documentMatches: count(list, (r) => r.documentMatch === true),
+    allDocumentsMatches: count(list, (r) => r.allDocumentsMatch === true),
     locationMatches: count(list, (r) => r.locationMatch === true),
     locationRangeMatches: count(list, (r) => r.locationRangeMatch === true),
     withMustContain: count(list, (r) => r.mustContainAll !== null),
@@ -353,12 +359,12 @@ function aggregate(rows: Row[]): Totals[] {
 
 function summaryTable(totals: Totals[]): string {
   const lines = [
-    "| Category | Questions | Errors | Correct refusals | Answered (of answerable) | Wrong refusals | Uncited | Cited document matches | Cited page/section matches (page shown) | Cited page/section matches (passage covers page) | mustContain present | Model wrote an unsupplied label (filtered out) | Unsupplied citation delivered (must be 0) | Safety violations |",
-    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+    "| Category | Questions | Errors | Correct refusals | Answered (of answerable) | Wrong refusals | Uncited | Cited document matches | All expected documents cited | Cited page/section matches (page shown) | Cited page/section matches (passage covers page) | mustContain present | Model wrote an unsupplied label (filtered out) | Unsupplied citation delivered (must be 0) | Safety violations |",
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ...totals.map(
       (t) =>
         `| ${t.category} | ${t.questions} | ${t.errors} | ${t.correctRefusals}/${t.unanswerable} | ${t.answered}/${t.answerable} | ${t.wrongRefusals} | ${t.uncited} | ` +
-        `${t.documentMatches}/${t.withExpectedSources} | ${t.locationMatches}/${t.withExpectedSources} | ${t.locationRangeMatches}/${t.withExpectedSources} | ${t.mustContainAll}/${t.withMustContain} | ${t.rawUnsuppliedLabelAnswers} | ${t.deliveredUnsuppliedCitations} | ${t.safetyViolations} |`,
+        `${t.documentMatches}/${t.withExpectedSources} | ${t.allDocumentsMatches}/${t.withExpectedSources} | ${t.locationMatches}/${t.withExpectedSources} | ${t.locationRangeMatches}/${t.withExpectedSources} | ${t.mustContainAll}/${t.withMustContain} | ${t.rawUnsuppliedLabelAnswers} | ${t.deliveredUnsuppliedCitations} | ${t.safetyViolations} |`,
     ),
   ];
   return `per-category counts:\n${lines.join("\n")}`;
@@ -380,7 +386,7 @@ function markdown(header: Record<string, unknown> & { safetyViolations: string[]
     "",
     summaryTable(totals).replace(/^per-category counts:\n/, ""),
     "",
-    "Column notes: fractions are `hits/eligible`. \"Cited document matches\" counts answerable questions where at least one cited source is an expected document (same edition). \"Cited page/section matches (page shown)\" additionally requires that the page shown by the citation, which is the first page of the cited passage, equals the expected page, and that the expected section is a substring of the section path, when the question specifies them. \"(passage covers page)\" accepts any cited passage whose page range includes the expected page; a gap between the two columns means citations point at the start of a multi-page passage rather than at the page holding the fact. \"Model wrote an unsupplied label\" counts answers in which the raw model output contained a label that was not in the prompt; the citation filter removes these before delivery.",
+    "Column notes: fractions are `hits/eligible`. \"Cited document matches\" counts answerable questions where at least one cited source is an expected document (same edition, matched by the uploaded document's ID, not by its title); \"All expected documents cited\" requires every expected document, which matters for multi-source questions. \"Cited page/section matches (page shown)\" additionally requires that the page shown by the citation, which is the first page of the cited passage, equals the expected page, and that the expected section is a substring of the section path, when the question specifies them. \"(passage covers page)\" accepts any cited passage whose page range includes the expected page; a gap between the two columns means citations point at the start of a multi-page passage rather than at the page holding the fact. \"Model wrote an unsupplied label\" counts answers in which the raw model output contained a label that was not in the prompt; the citation filter removes these before delivery.",
     "",
     "## Questions",
     "",

@@ -16,7 +16,10 @@
     "test:live": "vitest run --config vitest.live.config.mts",
     "db:migrate": "pnpm --filter @hks/database migrate",
     "services:start": "bash scripts/dev-services.sh start",
-    "services:stop": "bash scripts/dev-services.sh stop"
+    "services:stop": "bash scripts/dev-services.sh stop",
+    "demo:seed": "tsx scripts/seed-demo.mts",
+    "evaluate": "tsx scripts/evaluate.mts",
+    "check:readiness": "tsx scripts/check-readiness.mts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

@@ -51,7 +51,11 @@ for (const [name, url, viewport, theme, fullPage, action] of shots) {
   const page = await context.newPage();
   page.on("console", (m) => m.type() === "error" && problems.push(`${name}: console error: ${m.text()}`));
   page.on("pageerror", (e) => problems.push(`${name}: page error: ${e.message}`));
-  page.on("requestfailed", (r) => problems.push(`${name}: request failed: ${r.url()}`));
+  // A link prefetch that is cancelled when the page closes is not a failure.
+  page.on("requestfailed", (r) => {
+    if (r.failure()?.errorText === "net::ERR_ABORTED" && r.url().includes("_rsc=")) return;
+    problems.push(`${name}: request failed: ${r.url()} (${r.failure()?.errorText})`);
+  });
   page.on("response", (r) => r.status() >= 400 && problems.push(`${name}: HTTP ${r.status()} ${r.url()}`));
 
   await page.goto(base + url, { waitUntil: "networkidle" });

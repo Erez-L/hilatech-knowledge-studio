@@ -63,26 +63,52 @@ export type ChatEvent =
   | { type: "done"; messageId: string; status: "complete" | "cancelled"; answerStatus: "answered" | "insufficient_evidence" | "uncited"; sources: SourceView[] }
   | { type: "error"; code: string; messageId: string | null };
 
-export const api = {
-  me: (signal?: AbortSignal) => get<Me>("/api/v1/me", signal),
+export type Scope = "app" | "demo";
+
+/**
+ * The API client for one scope. "app" is the signed-in application; "demo" is
+ * the public demo, which is read-only and has no library, history or usage API.
+ */
+export function createApi(scope: Scope) {
+  const base = scope === "demo" ? "/api/v1/demo" : "/api/v1";
+  const demoStatus = (signal?: AbortSignal) =>
+    get<{ available: boolean; me?: Me; documents?: DocumentView[] }>(base, signal).then((status) => {
+      if (!status.available || !status.me) throw new ApiError("not_configured", 503);
+      return status as { available: true; me: Me; documents: DocumentView[] };
+    });
+  return {
+  scope,
+  urls: {
+    pageImage: (documentId: string, page: number) => `${base}/documents/${documentId}/pages/${page}`,
+    /** The original file can be downloaded in the app only. */
+    file: (documentId: string) => (scope === "app" ? `${base}/documents/${documentId}/file` : null),
+  },
+  me: (signal?: AbortSignal) => (scope === "demo" ? demoStatus(signal).then((s) => s.me) : get<Me>(`${base}/me`, signal)),
   documents: (query = "", signal?: AbortSignal) =>
-    get<{ documents: DocumentView[] }>(`/api/v1/documents${query ? `?q=${encodeURIComponent(query)}` : ""}`, signal).then((r) => r.documents),
-  deleteDocument: (id: string) => send<{ deleted: true }>(`/api/v1/documents/${id}`, "DELETE"),
-  retryDocument: (id: string) => send<{ queued: true }>(`/api/v1/documents/${id}/retry`, "POST", {}),
+    scope === "demo"
+      ? demoStatus(signal).then((s) => s.documents)
+      : get<{ documents: DocumentView[] }>(`${base}/documents${query ? `?q=${encodeURIComponent(query)}` : ""}`, signal).then((r) => r.documents),
+  deleteDocument: (id: string) => send<{ deleted: true }>(`${base}/documents/${id}`, "DELETE"),
+  retryDocument: (id: string) => send<{ queued: true }>(`${base}/documents/${id}/retry`, "POST", {}),
   documentContent: (id: string, page?: number, signal?: AbortSignal) =>
-    get<DocumentContent>(`/api/v1/documents/${id}/content${page ? `?page=${page}` : ""}`, signal),
-  conversations: (signal?: AbortSignal) => get<{ conversations: ConversationView[] }>("/api/v1/conversations", signal).then((r) => r.conversations),
+    get<DocumentContent>(`${base}/documents/${id}/content${page ? `?page=${page}` : ""}`, signal),
+  conversations: (signal?: AbortSignal) =>
+    scope === "demo"
+      ? Promise.resolve([] as ConversationView[]) // the demo keeps no history list
+      : get<{ conversations: ConversationView[] }>(`${base}/conversations`, signal).then((r) => r.conversations),
   conversation: (id: string, signal?: AbortSignal) =>
-    get<{ conversation: ConversationView; messages: MessageView[] }>(`/api/v1/conversations/${id}`, signal),
-  deleteConversation: (id: string) => send<{ deleted: true }>(`/api/v1/conversations/${id}`, "DELETE"),
+    get<{ conversation: ConversationView; messages: MessageView[] }>(`${base}/conversations/${id}`, signal),
+  deleteConversation: (id: string) => send<{ deleted: true }>(`${base}/conversations/${id}`, "DELETE"),
   usage: (signal?: AbortSignal) =>
-    get<{ today: { questions: number }; limits: { questionsPerDay: number } }>("/api/v1/usage", signal),
+    scope === "demo"
+      ? Promise.reject(new ApiError("not_found", 404))
+      : get<{ today: { questions: number }; limits: { questionsPerDay: number } }>(`${base}/usage`, signal),
 
   /** Upload with progress. Resolves with the accepted document (not yet ready). */
   upload(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<DocumentView> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/v1/documents");
+      xhr.open("POST", `${base}/documents`);
       xhr.responseType = "json";
       xhr.upload.onprogress = (event) => event.lengthComputable && onProgress(event.loaded / event.total);
       xhr.onload = () => {
@@ -100,7 +126,7 @@ export const api = {
 
   /** Asks a question and yields the server's events as they arrive. */
   async *ask(input: { question: string; conversationId?: string; locale: "he" | "en" }, signal: AbortSignal): AsyncGenerator<ChatEvent> {
-    const response = await fetch("/api/v1/chat", {
+    const response = await fetch(`${base}/chat`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -124,4 +150,7 @@ export const api = {
       }
     }
   },
-};
+  };
+}
+
+export type Api = ReturnType<typeof createApi>;

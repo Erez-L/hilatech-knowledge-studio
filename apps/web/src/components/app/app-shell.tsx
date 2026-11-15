@@ -167,20 +167,65 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+/** Navigation of the public demo: no account, no library, no history. */
+function DemoSidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const t = useTranslations("app");
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-sunken">
+      <div className="flex h-16 shrink-0 items-center px-5">
+        <Link href="/" className="rounded-control">
+          <Logo />
+        </Link>
+      </div>
+      <nav aria-label={t("nav.label")} className="flex min-h-0 flex-1 flex-col gap-1 px-4">
+        {/* A full navigation, so the conversation state is reset. */}
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate?.();
+            window.location.assign(window.location.pathname);
+          }}
+          className="flex min-h-11 items-center gap-3 rounded-control bg-surface px-3 text-start text-small font-semibold text-foreground shadow-raised"
+        >
+          <Plus className="size-4.5 shrink-0" aria-hidden />
+          {t("nav.newChat")}
+        </button>
+        <p className="mt-4 px-2 text-label leading-relaxed text-secondary">{t("demo.sidebarNote")}</p>
+      </nav>
+      <div className="shrink-0 border-t border-border px-4 py-3">
+        <div className="flex flex-col gap-2 pb-2">
+          <Button asChild>
+            <Link href="/sign-up">{t("demo.createAccount")}</Link>
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href="/sign-in">{t("demo.signIn")}</Link>
+          </Button>
+        </div>
+        <div className="flex items-center justify-end">
+          <LanguageSwitcher />
+          <ThemeSwitcher />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Application frame: navigation on the start side, the page beside it. On small screens the navigation is a sheet. */
 export function AppShell({ children }: { children: ReactNode }) {
   const t = useTranslations("workspace");
   const tn = useTranslations("app.nav");
   const [open, setOpen] = useState(false);
+  const { scope } = useApp();
+  const Navigation = scope === "demo" ? DemoSidebar : Sidebar;
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       <aside className="hidden w-72 shrink-0 border-e border-border wide:block">
-        <Sidebar />
+        <Navigation />
       </aside>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="start" title={tn("label")} closeLabel={t("closeSidebar")} className="wide:hidden">
-          <Sidebar onNavigate={() => setOpen(false)} />
+          <Navigation onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
       <AppShellContext.Provider value={() => setOpen(true)}>{children}</AppShellContext.Provider>

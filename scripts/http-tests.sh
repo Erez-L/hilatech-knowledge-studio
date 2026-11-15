@@ -23,6 +23,7 @@ export RAG_MIN_SIMILARITY=0.05 RAG_EVIDENCE_MIN_SIMILARITY=0.12
 export CHUNK_TARGET_CHARS=500 CHUNK_MAX_CHARS=800 CHUNK_OVERLAP_CHARS=100
 export UPLOAD_MAX_BYTES=$((2 * 1024 * 1024))
 export LIMIT_QUESTIONS_PER_MINUTE="${LIMIT_QUESTIONS_PER_MINUTE:-8}" LIMIT_AUTH_ATTEMPTS_PER_MINUTE="${LIMIT_AUTH_ATTEMPTS_PER_MINUTE:-8}" LIMIT_UPLOADS_PER_MINUTE=30
+export DEMO_ENABLED=true LIMIT_DEMO_QUESTIONS_PER_SESSION="${LIMIT_DEMO_QUESTIONS_PER_SESSION:-3}" LIMIT_DEMO_QUESTIONS_PER_MINUTE="${LIMIT_DEMO_QUESTIONS_PER_MINUTE:-6}" LIMIT_DEMO_QUESTIONS_PER_DAY="${LIMIT_DEMO_QUESTIONS_PER_DAY:-14}"
 export TRUSTED_PROXY_HOPS=1 LEADS_STORE=postgres LOG_LEVEL="${LOG_LEVEL:-warn}"
 export HTTP_TEST_WORK="$WORK"
 
@@ -48,6 +49,7 @@ trap cleanup EXIT
 stop_processes # leftovers from an interrupted run would steal queue jobs
 redis-cli -u "$REDIS_URL" flushdb >/dev/null
 pnpm exec tsx scripts/reset-test-database.mts
+pnpm exec tsx scripts/seed-demo.mts | tail -1 # the public demo tenant: twelve fictional documents, test-double embeddings
 [ "${1:-}" = "--no-build" ] || pnpm --filter @hks/web build >/dev/null
 
 PORT="$PORT" pnpm --filter @hks/web exec next start --port "$PORT" >"$WORK/web.log" 2>&1 &

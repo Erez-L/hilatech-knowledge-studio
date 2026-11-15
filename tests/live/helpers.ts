@@ -659,7 +659,7 @@ export type AskResult = {
   start: Extract<AnswerEvent, { type: "start" }> | undefined;
   done: Extract<AnswerEvent, { type: "done" }> | undefined;
   error: Extract<AnswerEvent, { type: "error" }> | undefined;
-  /** Labels of citation events, in order of arrival. */
+  /** Every label delivered to the client in citation or marker events, without repeats. */
   citedLabels: string[];
   /** True when the chat model was called for this question (false: stopped by the similarity thresholds). */
   modelCalled: boolean;
@@ -682,7 +682,13 @@ export async function ask(harness: LiveHarness, tenant: Tenant, question: string
     start: events.find((e) => e.type === "start") as AskResult["start"],
     done: events.find((e) => e.type === "done") as AskResult["done"],
     error: events.find((e) => e.type === "error") as AskResult["error"],
-    citedLabels: events.filter((e) => e.type === "citation").map((e) => (e as { source: { label: string } }).source.label),
+    citedLabels: [
+      ...new Set([
+        ...events.filter((e) => e.type === "citation").map((e) => (e as { source: { label: string } }).source.label),
+        // Position markers (one per occurrence of a citation in the text stream) also carry labels to the client.
+        ...events.filter((e) => (e as { type: string }).type === "marker").map((e) => (e as unknown as { label: string }).label),
+      ]),
+    ],
     modelCalled: call !== undefined,
     rawModelText: call ? call.rawText : null,
     suppliedLabels: call ? suppliedLabels(call.request) : [],

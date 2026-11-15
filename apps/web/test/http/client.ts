@@ -7,7 +7,8 @@ let ipCounter = 10;
 /** A browser-like client: keeps cookies, sends Origin, and has its own (trusted-proxy) client address. */
 export class Client {
   private cookies = new Map<string, string>();
-  readonly ip = `203.0.113.${ipCounter++}`;
+  // Always a valid address: an invalid one would not count as a client address at all.
+  readonly ip = ((n: number) => `198.18.${Math.floor(n / 250)}.${(n % 250) + 1}`)(ipCounter++);
   organizationId: string | null = null;
 
   async request(path: string, init: RequestInit & { origin?: string | null; json?: unknown } = {}) {
@@ -96,7 +97,10 @@ export async function register(name = "user", locale: "en" | "he" = "en") {
   const signUp = await client.post("/api/auth/sign-up/email", { name, email, password: PASSWORD, locale });
   if (!signUp.ok) throw new Error(`sign-up failed: ${signUp.status} ${await signUp.text()}`);
   const link = await lastLink(email, "verify_email");
-  await client.get(link.replace(BASE, ""));
+  const verified = await client.get(link.replace(BASE, ""));
+  if (verified.status >= 400 || /error=/.test(verified.headers.get("location") ?? "")) {
+    throw new Error(`verification failed: ${verified.status} ${verified.headers.get("location") ?? (await verified.text())}`);
+  }
   const signIn = await client.post("/api/auth/sign-in/email", { email, password: PASSWORD });
   if (!signIn.ok) throw new Error(`sign-in failed: ${signIn.status} ${await signIn.text()}`);
   const me = await client.getJson("/api/v1/me");

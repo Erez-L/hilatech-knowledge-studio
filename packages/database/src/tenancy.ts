@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { Db, Executor } from "./client.ts";
-import { withTenant } from "./client.ts";
+import { withTenant, type TenantContext } from "./client.ts";
 import { memberships, organizations, users, workspaces } from "./schema.ts";
 
 export type Role = "owner" | "admin" | "member";
@@ -129,4 +129,31 @@ export async function changeMember(
     else await tx.update(memberships).set({ role: change.role }).where(eq(memberships.id, target.id));
     return "ok";
   });
+}
+
+/* -------------------------------------------------------------------- demo */
+
+/**
+ * The single public-demo organization and its workspace. It has no members:
+ * nobody signs in to it, so nobody can upload to it or delete from it through
+ * the authenticated API. Content is loaded only by the seed script.
+ */
+export async function ensureDemoOrganization(db: Db): Promise<TenantContext> {
+  let org = await getDemoOrganization(db);
+  if (!org) {
+    await db
+      .insert(organizations)
+      .values({ name: "Northstar Business Services (demo)", slug: "public-demo", kind: "demo" })
+      .onConflictDoNothing();
+    org = await getDemoOrganization(db);
+  }
+  if (!org) throw new Error("could not create the demo organization");
+  const organizationId = org.id;
+  const workspace = await withTenant(db, organizationId, async (tx) => {
+    const existing = await defaultWorkspace(tx, organizationId);
+    if (existing) return existing;
+    const [created] = await tx.insert(workspaces).values({ organizationId, name: "Demo", slug: "demo" }).returning();
+    return created!;
+  });
+  return { organizationId, workspaceId: workspace.id };
 }

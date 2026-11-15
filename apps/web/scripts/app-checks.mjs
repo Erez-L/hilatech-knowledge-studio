@@ -15,6 +15,8 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ channel: "chrome", args: ["--no-sandbox"] });
 const results = [];
 const consoleErrors = [];
+let seen404 = 0;
+let stage = "start"; // names the step in progress, for error reports
 const check = (name, pass, detail = "") => {
   results.push({ name, pass });
   console.log(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`);
@@ -29,7 +31,7 @@ async function newPage(options = {}) {
   const page = await context.newPage();
   // Expected in these flows: 401 for a signed-out visitor, 400 for the deliberately invalid reset token.
   page.on("console", (m) => m.type() === "error" && !/status of 40[013]|status of 429/.test(m.text()) && consoleErrors.push(m.text()));
-  page.on("pageerror", (e) => consoleErrors.push(e.message));
+  page.on("pageerror", (e) => consoleErrors.push(`${e.message.slice(0, 160)} @ ${new URL(page.url()).pathname} [${stage}]`));
   return { context, page };
 }
 async function mailLink(to, kind) {
@@ -191,6 +193,7 @@ await shot(page, "library-delete-dialog-desktop");
 await axe("delete dialog (en)", page);
 await page.getByRole("button", { name: "Delete document" }).click();
 await page.getByText("Customer support handbook was deleted.").waitFor();
+await page.getByRole("button", { name: "Open Customer support handbook" }).first().waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
 check("delete: document removed after confirmation", (await page.getByRole("button", { name: "Open Customer support handbook" }).count()) === 0);
 await page.goto(conversationUrl, { waitUntil: "networkidle" });
 await page.locator("[data-answer-status='complete']").first().locator("button[aria-pressed]").first().click();
@@ -317,7 +320,74 @@ for (const locale of ["en", "he"]) {
   await context.close();
 }
 
-check("no unexpected console errors", consoleErrors.length === 0, [...new Set(consoleErrors)].slice(0, 4).join(" | "));
+/* ------------------------------------------------ public demo (no sign-in; fictional documents; AI = test doubles here) */
+{
+  const { context, page } = await newPage();
+  const apiCalls = [];
+  page.on("request", (r) => r.url().includes("/api/") && apiCalls.push(new URL(r.url()).pathname));
+  await page.goto(`${base}/en/demo`, { waitUntil: "networkidle" });
+  await page.locator("[data-suggested-question]").first().waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  check("demo: opens without an account, as the real workspace", page.url().endsWith("/en/demo") && (await page.getByText("Public demo").first().isVisible()));
+  check("demo: lists the twelve fictional documents", (await page.getByText("12 documents ready").count()) > 0 || (await page.locator("main li[dir='auto']").count()) === 12, `${await page.locator("main li[dir='auto']").count()} rows`);
+  check("demo: says that it runs on test doubles on this stack", await page.getByText("Test double", { exact: true }).isVisible());
+  check("demo: offers no upload, library, history or sign-out", (await page.getByRole("link", { name: "Library" }).count()) === 0 && (await page.getByRole("button", { name: "Sign out" }).count()) === 0 && (await page.locator("input[type=file]").count()) === 0);
+  await shot(page, "demo-empty-desktop");
+  await axe("demo empty state (en)", page);
+
+  await page.locator("[data-suggested-question='priority']").click();
+  await page.locator("[data-answer-status='complete']").waitFor({ timeout: 20000 });
+  await page.locator("[data-answer-status='complete'] button[aria-pressed]").first().click();
+  await page.locator("#evidence-region mark[data-active]").waitFor();
+  await page.waitForTimeout(500);
+  check("demo: a suggested question is answered with a citation and its evidence", true);
+  check("demo: the conversation is addressable", /\/en\/demo\?c=[0-9a-f-]{36}$/.test(page.url()), page.url());
+  check("demo: no original-file download is offered", (await page.locator("#evidence-region a[download], #evidence-region a[href*='/file']").count()) === 0);
+  await shot(page, "demo-answer-evidence-desktop");
+  await axe("demo with evidence (en)", page);
+  const pageTab = page.locator("#evidence-region").getByRole("tab", { name: /Page|Original/ }).first();
+  if (await pageTab.count()) {
+    await pageTab.click();
+    await page.waitForFunction(() => { const img = document.querySelector("#evidence-region img"); return img && img.complete && img.naturalWidth > 0; }, null, { timeout: 20000 }).catch(() => {});
+    check("demo: the cited page renders as an image from the demo API", await page.locator("#evidence-region img").first().evaluate((img) => img.complete && img.naturalWidth > 0 && img.src.includes("/api/v1/demo/documents/")));
+  }
+  await page.reload({ waitUntil: "networkidle" });
+  await page.locator("[data-answer-status='complete']").waitFor({ timeout: 20000 });
+  check("demo: reloading restores the visitor's own conversation", true);
+  check("demo: the browser calls only the demo API", apiCalls.every((p) => p.startsWith("/api/v1/demo")), [...new Set(apiCalls.filter((p) => !p.startsWith("/api/v1/demo")))].join(", "));
+  await context.close();
+
+  // Another visitor cannot open that conversation: they land on a fresh demo.
+  const other = await newPage(); // its one expected 404 (the conversation is not theirs) is filtered below
+  await other.page.goto(page.url(), { waitUntil: "networkidle" });
+  await other.page.locator("[data-suggested-question]").first().waitFor();
+  check("demo: another visitor cannot open someone else's conversation", other.page.url().endsWith("/en/demo"), other.page.url());
+  await other.context.close();
+
+  for (const [locale, name, options] of [
+    ["he", "demo-hebrew-desktop", {}],
+    ["en", "demo-dark-desktop", { colorScheme: "dark" }],
+    ["he", "demo-hebrew-mobile", { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }],
+  ]) {
+    const { context, page } = await newPage(options);
+    stage = `${name}: load`;
+    await page.goto(`${base}/${locale}/demo`, { waitUntil: "networkidle" });
+    await page.locator("[data-suggested-question]").first().waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    await shot(page, `${name}-empty`);
+    stage = `${name}: ask`;
+    await page.locator("[data-suggested-question='refund']").click();
+    await page.locator("[data-answer-status='complete']").waitFor({ timeout: 20000 });
+    await page.waitForTimeout(500);
+    await shot(page, name);
+    await axe(`demo answer (${name})`, page);
+    check(`${name}: no horizontal overflow`, (await overflow(page)) <= 1, `${await overflow(page)}px`);
+    await context.close();
+  }
+}
+
+const unexpected = consoleErrors.filter((m) => !/status of 404/.test(m) || ++seen404 > 1);
+check("no unexpected console errors", unexpected.length === 0, [...new Set(unexpected)].slice(0, 4).join(" | "));
 await browser.close();
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

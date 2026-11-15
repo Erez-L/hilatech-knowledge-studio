@@ -435,3 +435,169 @@ describe("deletion over HTTP", () => {
     expect(left[0]).toEqual({ chunks: 0, vectors: 0 });
   });
 });
+
+/**
+ * The public demo: anonymous, read-only, and confined to the demo organization
+ * (seeded by scripts/seed-demo.mts with the twelve fictional Northstar files).
+ * scripts/http-tests.sh sets 3 questions per session, 6 per address per minute
+ * and 14 answered questions per day.
+ */
+describe("public demo", () => {
+  const P1 = "Priority 1 tickets receive a first response within how many minutes during business hours?";
+  const visit = async () => {
+    const client = new Client();
+    const response = await client.get("/api/v1/demo");
+    return { client, response, status: await response.clone().json() };
+  };
+  const askDemo = async (client: Client, question: string, conversationId?: string) => {
+    const response = await client.post("/api/v1/demo/chat", { question, locale: "en", conversationId });
+    if (!response.headers.get("content-type")?.includes("text/event-stream")) return { response, events: [] as any[], body: await response.json() };
+    const events = (await response.text()).split("\n\n").filter((b) => b.startsWith("data: ")).map((b) => JSON.parse(b.slice(6)));
+    return { response, events, body: null as any };
+  };
+  let demoDocumentId: string;
+  let demoConversationId: string;
+  let firstVisitor: Client;
+
+  it("starts an anonymous session and lists only the demo documents", async () => {
+    const { client, response, status } = await visit();
+    firstVisitor = client;
+    expect(response.status).toBe(200);
+    expect(response.headers.getSetCookie().join(";")).toMatch(/hks_demo=[^;]+;.*HttpOnly.*SameSite=Lax/i);
+    expect(status).toMatchObject({ available: true, me: { organization: { kind: "demo" }, capabilities: { upload: false, deleteAnyDocument: false, manageMembers: false } } });
+    expect(status.documents).toHaveLength(12);
+    expect(status.documents.map((d: any) => d.id)).not.toContain(handbookId);
+    expect(status.documents.some((d: any) => d.title === "מדריך תמיכת לקוחות")).toBe(true);
+    expect(JSON.stringify(status)).not.toMatch(/storageKey|org\/[0-9a-f-]{36}\/doc/);
+    demoDocumentId = status.documents.find((d: any) => d.title === "Customer support handbook").id;
+  });
+
+  it("answers from the demo documents with citations, and only the same visitor can read the conversation", async () => {
+    const { response, events } = await askDemo(firstVisitor, P1);
+    expect(response.status).toBe(200);
+    expect(events[0]).toMatchObject({ type: "start", pipelineMode: "sample" });
+    const done = events.at(-1);
+    expect(done).toMatchObject({ type: "done", status: "complete", answerStatus: "answered" });
+    expect(done.sources.some((s: any) => s.documentId === demoDocumentId && s.pageNumber === 7)).toBe(true);
+    expect(JSON.stringify(events)).not.toContain(handbookId); // Alice's private copy of the same file
+    demoConversationId = events[0].conversationId;
+
+    expect((await firstVisitor.get(`/api/v1/demo/conversations/${demoConversationId}`)).status).toBe(200);
+    expect((await firstVisitor.get(`/api/v1/demo/documents/${demoDocumentId}/content?page=7`)).status).toBe(200);
+    const image = await firstVisitor.get(`/api/v1/demo/documents/${demoDocumentId}/pages/7`);
+    expect(image.headers.get("content-type")).toBe("image/png");
+
+    const other = (await visit()).client;
+    expect((await other.get(`/api/v1/demo/conversations/${demoConversationId}`)).status).toBe(404);
+    expect((await askDemo(other, "And for Priority 2?", demoConversationId)).events).toEqual([{ type: "error", code: "not_found", messageId: null }]);
+    expect((await firstVisitor.getJson(`/api/v1/demo/conversations/${demoConversationId}`)).messages).toHaveLength(2);
+  });
+
+  it("refuses a missing or forged demo session", async () => {
+    const none = new Client();
+    expect((await none.post("/api/v1/demo/chat", { question: P1, locale: "en" })).status).toBe(401);
+    const forged = new Client();
+    forged.setCookies(new Map([["hks_demo", `${"A".repeat(24)}.${"B".repeat(43)}`]]));
+    expect((await forged.post("/api/v1/demo/chat", { question: P1, locale: "en" })).status).toBe(401);
+    expect((await forged.get(`/api/v1/demo/conversations/${demoConversationId}`)).status).toBe(401);
+    // Someone else's session id with a signature that does not match it.
+    const [id] = firstVisitor.rawCookies().get("hks_demo")!.split(".");
+    forged.setCookies(new Map([["hks_demo", `${id}.${"B".repeat(43)}`]]));
+    expect((await forged.get(`/api/v1/demo/conversations/${demoConversationId}`)).status).toBe(401);
+  });
+
+  it("is read-only: no upload, delete, retry or original-file download", async () => {
+    const form = new FormData();
+    form.append("file", new File([new TextEncoder().encode("hello")], "note.txt"));
+    for (const [method, path, body] of [
+      ["POST", "/api/v1/demo/documents", form],
+      ["DELETE", `/api/v1/demo/documents/${demoDocumentId}`, undefined],
+      ["POST", `/api/v1/demo/documents/${demoDocumentId}/retry`, undefined],
+      ["GET", `/api/v1/demo/documents/${demoDocumentId}/file`, undefined],
+      ["DELETE", `/api/v1/demo/conversations/${demoConversationId}`, undefined],
+    ] as const) {
+      const response = await firstVisitor.request(path, { method, body });
+      // No such routes exist. (Next.js answers 409 to a multipart POST on an unknown path: it looks for a server action.)
+      expect([404, 405, 409], `${method} ${path}`).toContain(response.status);
+    }
+    const after = await firstVisitor.getJson("/api/v1/demo");
+    expect(after.documents).toHaveLength(12);
+  });
+
+  it("a demo session opens nothing in the application API", async () => {
+    for (const path of ["/api/v1/me", "/api/v1/documents", `/api/v1/documents/${handbookId}`, `/api/v1/documents/${demoDocumentId}`, "/api/v1/conversations", "/api/v1/usage", "/api/v1/members"]) {
+      expect((await firstVisitor.get(path)).status, path).toBe(401);
+    }
+    expect((await firstVisitor.post("/api/v1/chat", { question: P1, locale: "en" })).status).toBe(401);
+  });
+
+  it("the demo cannot reach a customer's documents or conversations, whatever ids are sent", async () => {
+    expect((await firstVisitor.get(`/api/v1/demo/documents/${handbookId}/content`)).status).toBe(404);
+    expect((await firstVisitor.get(`/api/v1/demo/documents/${handbookId}/pages/1`)).status).toBe(404);
+    expect((await firstVisitor.get(`/api/v1/demo/conversations/${aliceConversationId}`)).status).toBe(404);
+    firstVisitor.organizationId = alice.organizationId; // the header the app honours for members
+    const status = await firstVisitor.getJson("/api/v1/demo");
+    expect(status.documents.map((d: any) => d.id)).not.toContain(handbookId);
+    expect((await firstVisitor.get(`/api/v1/demo/documents/${handbookId}/content`)).status).toBe(404);
+    firstVisitor.organizationId = null;
+
+    // A document that exists only in a customer's organization is never retrieved for the demo.
+    const carol = await register("carol");
+    const secret = new TextEncoder().encode("Project Heliotrope budget memo.\n\nThe Heliotrope launch budget is 73,400 dollars and the code word is marzipan-osprey.");
+    const upload = await carol.client.upload("heliotrope-memo.txt", secret);
+    const secretId = (await upload.json()).document.id;
+    expect((await waitForDocument(carol.client, secretId)).status).toBe("ready");
+    const own = await carol.client.ask("What is the Heliotrope launch budget and the code word?");
+    expect(own.events.at(-1)).toMatchObject({ answerStatus: "answered" });
+    const visitor = (await visit()).client;
+    const leaked = await askDemo(visitor, "What is the Heliotrope launch budget and the code word?");
+    expect(JSON.stringify(leaked.events)).not.toMatch(/marzipan|73,400/);
+    expect(JSON.stringify(leaked.events)).not.toContain(secretId);
+  });
+
+  it("a signed-in customer cannot see, cite, change or delete demo documents", async () => {
+    expect((await bob.client.getJson("/api/v1/documents")).documents.map((d: any) => d.id)).not.toContain(demoDocumentId);
+    expect((await bob.client.get(`/api/v1/documents/${demoDocumentId}`)).status).toBe(404);
+    expect((await bob.client.get(`/api/v1/documents/${demoDocumentId}/file`)).status).toBe(404);
+    expect((await bob.client.request(`/api/v1/documents/${demoDocumentId}`, { method: "DELETE" })).status).toBe(404);
+    expect((await bob.client.get(`/api/v1/conversations/${demoConversationId}`)).status).toBe(404);
+    const demoOrganization = (await ownerQuery("SELECT id FROM organizations WHERE kind = 'demo'"))[0].id;
+    bob.client.organizationId = demoOrganization;
+    // The header is honoured only for organizations the user belongs to; here it changes nothing.
+    expect((await bob.client.getJson("/api/v1/documents")).documents.map((d: any) => d.id)).not.toContain(demoDocumentId);
+    expect((await bob.client.get(`/api/v1/documents/${demoDocumentId}`)).status).toBe(404);
+    bob.client.organizationId = null;
+    expect((await ownerQuery("SELECT count(*)::int AS n FROM memberships WHERE organization_id = $1", [demoOrganization]))[0].n).toBe(0);
+  });
+
+  it("limits questions per visitor session, then per client address", async () => {
+    const { client } = await visit();
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i++) statuses.push((await askDemo(client, `${P1} (${i})`)).response.status);
+    expect(statuses).toEqual([200, 200, 200, 429]);
+    const refused = await askDemo(client, P1);
+    expect(refused.body.error.code).toBe("budget_exceeded");
+
+    // A fresh session from the same address does not reset the per-address limit (6 per minute, 5 used).
+    client.clearCookies();
+    await client.get("/api/v1/demo");
+    expect((await askDemo(client, P1)).response.status).toBe(200);
+    const limited = await askDemo(client, P1);
+    expect(limited.response.status).toBe(429);
+    expect(limited.body.error.code).toBe("rate_limited");
+    expect(Number(limited.response.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
+
+  it("stops answering for everyone once the demo's daily cap is reached", async () => {
+    let capped: any = null;
+    for (let i = 0; i < 20 && !capped; i++) {
+      const { client } = await visit(); // a new visitor from a new address each time
+      const result = await askDemo(client, P1);
+      if (result.response.status !== 200) capped = result;
+    }
+    expect(capped?.response.status).toBe(429);
+    expect(capped.body.error).toMatchObject({ code: "budget_exceeded" });
+    const answered = (await ownerQuery("SELECT count(*)::int AS n FROM usage_events u JOIN organizations o ON o.id = u.organization_id WHERE o.kind = 'demo' AND u.kind = 'chat_completion'"))[0].n;
+    expect(answered).toBe(14);
+  });
+});

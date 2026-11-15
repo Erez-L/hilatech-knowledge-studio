@@ -68,6 +68,12 @@ const schema = z.object({
   SMTP_URL: z.string().optional(),
 
   LIMIT_AUTH_ATTEMPTS_PER_MINUTE: int(10, 1),
+
+  // Public demo: no sign-in, read-only, tightly limited.
+  DEMO_ENABLED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  LIMIT_DEMO_QUESTIONS_PER_MINUTE: int(4, 1),
+  LIMIT_DEMO_QUESTIONS_PER_SESSION: int(15, 1),
+  LIMIT_DEMO_QUESTIONS_PER_DAY: int(300, 1),
   LIMIT_UPLOADS_PER_MINUTE: int(10, 1),
   LEADS_STORE: z.enum(["file", "postgres", "none"]).optional(),
 });

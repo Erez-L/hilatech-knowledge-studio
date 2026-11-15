@@ -8,9 +8,9 @@ This is an independently developed demonstration product by HilaTech. The compan
 
 **Milestone 1 — design foundation: closed.** Design system, landing page and the Knowledge Workspace in sample-preview mode, in English and Hebrew. See `docs/MILESTONE_1_REPORT.md`.
 
-**Milestone 2 — real RAG: in progress.** The backend pipeline is built and tested: PostgreSQL + pgvector schema with row-level security, document extraction and chunking, a BullMQ ingestion worker, tenant-scoped retrieval, grounded answers with validated citations, persistence and deletion. It is tested end to end with **deterministic test doubles** in place of the embedding and chat models.
+**Milestone 2 — real RAG: built, tested with test doubles, not yet verified with real AI providers.** Accounts and organizations (Better Auth), a private document library, an ingestion worker, tenant-scoped retrieval on PostgreSQL + pgvector with row-level security, streamed answers with validated citations, an evidence viewer, and a public demo with strict limits. Every screen works against the real backend in English and Hebrew.
 
-**Not done yet:** authentication, the HTTP API, and wiring the interface to the backend. The workspace in the browser still shows pre-written samples and says so. **The pipeline has not been run against real model providers**, so it is not yet claimed to work as an AI product. See `docs/MILESTONE_2_PLAN.md`.
+**What is simulated:** in every test the embedding and chat models are **deterministic test doubles**, and the interface labels their output as such. **No call has been made to Anthropic, Amazon Bedrock or Amazon S3**, so answer quality, retrieval quality and cross-language retrieval are unknown, and this is not yet claimed to work as an AI product. The tests and procedure for that verification are ready: `docs/REAL_PROVIDER_VERIFICATION.md`. Full status: `docs/MILESTONE_2_PLAN.md`.
 
 ## Run it
 
@@ -29,22 +29,34 @@ pnpm lint
 pnpm build && pnpm start
 ```
 
-Backend tests need PostgreSQL 16 with pgvector and Redis:
+Tests need PostgreSQL 16 with pgvector and Redis. All of them use deterministic test doubles in place of the AI models:
 
 ```bash
 bash scripts/dev-services.sh start   # host-installed services (see the script header)
-pnpm test                            # 65 tests: database, AI layer, end-to-end pipeline
+pnpm test                            # 68 tests: database, AI layer, pipeline
+bash scripts/http-tests.sh           # 58 tests over HTTP: auth, authorization, tenant isolation, public demo, limits
+bash scripts/ui-checks.sh            # 75 browser checks with screenshots into artifacts/screenshots/app
 ```
 
-Browser checks (need Google Chrome and a running server on port 3100):
+Checks of the landing page and the scripted preview (need a server on port 3100):
 
 ```bash
 pnpm --filter @hks/web exec next start --port 3100
-node apps/web/scripts/visual-qa.mjs     # screenshots into artifacts/screenshots
-node apps/web/scripts/checks.mjs        # accessibility and interaction checks
+node apps/web/scripts/visual-qa.mjs
+node apps/web/scripts/checks.mjs
 ```
 
-Configuration is described in `.env.example`. No secrets are needed for this milestone.
+Operating commands:
+
+```bash
+pnpm db:migrate          # apply migrations (owner credentials)
+pnpm demo:seed           # index the twelve fictional documents into the public demo
+pnpm evaluate            # run the 46 evaluation questions; add `-- --yes` with real providers (paid)
+pnpm check:readiness     # inspect a production configuration; calls no paid service
+pnpm test:live           # real-provider tests; every file is off until its switch is set
+```
+
+Configuration is described in `.env.example`. Real-provider verification has not been run; the procedure is `docs/REAL_PROVIDER_VERIFICATION.md` and the current status is `docs/MILESTONE_2_PLAN.md`.
 
 ## Layout
 
@@ -74,4 +86,5 @@ samples/northstar/   fictional sample documents (built by scripts/build-sample-d
 |---|---|
 | Product | `PRODUCT_REQUIREMENTS`, `USER_JOURNEYS`, `FEATURE_SCOPE`, `ACCEPTANCE_CRITERIA` |
 | Design | `DESIGN_VISION`, `DESIGN_SYSTEM`, `SCREEN_BLUEPRINTS`, `RESPONSIVE_BEHAVIOR` |
-| Architecture (designs, not implemented) | `ARCHITECTURE`, `DATABASE_SCHEMA`, `RAG_PIPELINE`, `SECURITY`, `DEPLOYMENT` |
+| Architecture | `ARCHITECTURE`, `DATABASE_SCHEMA`, `RAG_PIPELINE`, `SECURITY`, `DEPLOYMENT` |
+| Status and verification | `MILESTONE_1_REPORT`, `MILESTONE_2_PLAN`, `REAL_PROVIDER_VERIFICATION` |

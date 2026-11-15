@@ -4,7 +4,7 @@ import { Dialog } from "radix-ui";
 import { Check, CloudUpload, Eye, LoaderCircle, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import { api, ApiError, type DocumentView } from "@/lib/api";
+import { ApiError, type DocumentView } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { FileGlyph } from "@/components/shared/file-glyph";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export function Library() {
   const tw = useTranslations("workspace");
   const te = useTranslations("app.evidence");
   const locale = useLocale();
-  const { me, handleAuthError } = useApp();
+  const { api, me, handleAuthError } = useApp();
 
   const [documents, setDocuments] = useState<DocumentView[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -57,7 +57,7 @@ export function Library() {
         setFailed(true);
       }
     },
-    [handleAuthError],
+    [api, handleAuthError],
   );
 
   // Debounced search.

@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight, Download, FileX2, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import { api, type DocumentContent, type SourceView } from "@/lib/api";
+import type { DocumentContent, SourceView } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { FileGlyph } from "@/components/shared/file-glyph";
 import { Button } from "@/components/ui/button";
@@ -133,7 +133,8 @@ function DocumentView({
   pageLabel: (n: number, total: number | null) => string;
 }) {
   const t = useTranslations("app.evidence");
-  const { handleAuthError } = useApp();
+  const { api, handleAuthError } = useApp();
+  const fileUrl = api.urls.file(target.documentId);
   const [mode, setMode] = useState<"text" | "image">("text");
   // Each result is stored with the request it answers; anything else on screen is "loading".
   const [result, setResult] = useState<{ key: string; status: "ready" | "error"; data: DocumentContent | null }>({ key: "", status: "ready", data: null });
@@ -158,7 +159,7 @@ function DocumentView({
         setResult({ key: requestKey, status: "error", data: null });
       });
     return () => controller.abort();
-  }, [target.documentId, page, requestKey, handleAuthError]);
+  }, [api, target.documentId, page, requestKey, handleAuthError]);
 
   // Bring the cited passage into view once the text is there.
   useEffect(() => {
@@ -181,8 +182,9 @@ function DocumentView({
         <h3 id="evidence-document" dir="auto" className="truncate-start flex-1 text-small font-semibold">
           {target.title}
         </h3>
+        {fileUrl && (
         <a
-          href={`/api/v1/documents/${target.documentId}/file`}
+          href={fileUrl}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={t("download")}
@@ -191,6 +193,7 @@ function DocumentView({
         >
           <Download className="size-4.5" aria-hidden />
         </a>
+        )}
       </div>
 
       {isPdf && (
@@ -242,7 +245,7 @@ function DocumentView({
               // eslint-disable-next-line @next/next/no-img-element -- an authorized, per-user image; not a static asset
               <img
                 key={`${target.documentId}-${page}`}
-                src={`/api/v1/documents/${target.documentId}/pages/${page}`}
+                src={api.urls.pageImage(target.documentId, page ?? 1)}
                 alt={t("pageImageAlt", { n: page ?? 1, title: target.title })}
                 onLoad={() => setImage({ key: imageKey, status: "ready" })}
                 onError={() => setImage({ key: imageKey, status: "error" })}

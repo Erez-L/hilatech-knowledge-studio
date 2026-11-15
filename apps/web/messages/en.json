@@ -296,7 +296,7 @@
     },
     "mode": {
       "sampleBadge": "Test double",
-      "sampleBanner": "This deployment runs with test doubles in place of the AI models. Answers below are assembled mechanically from your documents to exercise the system; they are not AI output.",
+      "sampleBanner": "This deployment runs with test doubles in place of the AI models. Answers below are assembled mechanically from the documents to exercise the system; they are not AI output.",
       "unconfiguredTitle": "Answering isn't connected yet",
       "unconfiguredBody": "No AI provider is configured on this deployment, so questions can't be answered. Uploading and reading documents still works once indexing is configured.",
       "sampleAnswerTag": "Test-double output, not AI"
@@ -423,6 +423,23 @@
       "dismiss": "Dismiss",
       "toastDeleted": "{title} was deleted.",
       "toastRetry": "{title} was queued again."
+    },
+    "demo": {
+      "suggestionsTitle": "Try one of these questions",
+      "suggestions": {
+        "refund": "What is the refund window for annual plans, and who can approve a refund?",
+        "priority": "How quickly do we have to respond to a Priority 1 ticket?",
+        "onboarding": "What does a new employee need to finish in their first week?",
+        "plans": "How do the Bookkeeping Essentials and Growth plans differ?"
+      },
+      "sidebarNote": "A public demo with fictional documents. Uploading is available after you sign in.",
+      "limitReached": "You've reached the question limit for this demo.",
+      "badge": "Public demo",
+      "createAccount": "Create an account",
+      "signIn": "Sign in",
+      "usage": "{limit} questions per demo session",
+      "emptyTitle": "Ask the Northstar documents",
+      "emptyBody": "Northstar Business Services is a fictional company. Ask about its twelve sample documents, in English or Hebrew, and every answer shows the passages it is based on."
     }
   }
 }

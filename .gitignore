@@ -11,3 +11,7 @@ next-env.d.ts
 test-results
 playwright-report
 .DS_Store
+
+# Written by test and evaluation runs
+artifacts/evaluation
+artifacts/live-verification
