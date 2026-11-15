@@ -1,0 +1,11 @@
+Northstar Business Services - Office Holiday Schedule 2027
+(Northstar Business Services is a fictional company. This file is sample content.)
+
+The office is closed on the dates below. Support for Priority 1 tickets continues through the on-call duty manager.
+
+Spring closure: 21 April to 28 April 2027.
+Summer closure: 15 August 2027, one day.
+Autumn closure: 1 October to 3 October 2027, and 15 October to 22 October 2027.
+
+Payroll runs that fall inside a closure are processed on the last working day before it.
+Customers are told about each closure by email two weeks in advance.

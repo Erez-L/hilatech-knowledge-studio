@@ -1,0 +1,135 @@
+import type { ExtractedBlock } from "../extraction/types.ts";
+import { estimateTokens, normalizeForSearch } from "./normalize.ts";
+
+export type ChunkOptions = { targetChars: number; maxChars: number; overlapChars: number };
+
+export type Chunk = {
+  chunkIndex: number;
+  text: string;
+  searchText: string;
+  pageNumber: number | null;
+  pageEnd: number | null;
+  sectionPath: string[] | null;
+  tokenEstimate: number;
+  chunkingVersion: string;
+};
+
+type Unit = { text: string; page: number | null; section: string[] | null };
+
+export const chunkingVersion = (o: ChunkOptions) => `v1:${o.targetChars}/${o.maxChars}/${o.overlapChars}`;
+
+/**
+ * Structure-aware chunking.
+ *
+ * - Text is packed paragraph by paragraph up to `targetChars`.
+ * - A paragraph longer than `targetChars` is split at sentence ends, and a
+ *   sentence longer than that at whitespace. No chunk exceeds `maxChars`.
+ * - A new section (heading trail) starts a new chunk.
+ * - Consecutive chunks in the same section share up to `overlapChars` of
+ *   trailing sentences, so a fact split across a boundary is still retrievable.
+ * - Page numbers are carried from extraction: `pageNumber` is the page where
+ *   the chunk starts and `pageEnd` where it ends, when they differ.
+ */
+export function chunkBlocks(blocks: ExtractedBlock[], options: ChunkOptions): Chunk[] {
+  if (options.overlapChars > options.maxChars - options.targetChars) {
+    throw new Error("overlapChars must not exceed maxChars - targetChars");
+  }
+  // Units are at most targetChars long, so a unit plus the carried overlap always fits in maxChars.
+  const units = blocks.flatMap((block) => toUnits(block, options.targetChars));
+  const version = chunkingVersion(options);
+  const chunks: Chunk[] = [];
+  let current: Unit[] = [];
+  let carried = null as Unit | null; // overlap text from the previous chunk
+
+  const length = () => current.reduce((sum, unit) => sum + unit.text.length + 2, carried ? carried.text.length + 2 : 0);
+
+  const flush = (allowOverlap: boolean) => {
+    if (current.length === 0) return;
+    const parts = carried ? [carried, ...current] : current;
+    const text = parts.map((unit) => unit.text).join("\n\n");
+    const first = parts[0]!;
+    const last = parts[parts.length - 1]!;
+    chunks.push({
+      chunkIndex: chunks.length,
+      text,
+      searchText: normalizeForSearch(text),
+      pageNumber: first.page,
+      pageEnd: last.page !== null && last.page !== first.page ? last.page : null,
+      sectionPath: current[0]!.section,
+      tokenEstimate: estimateTokens(text),
+      chunkingVersion: version,
+    });
+    const tail = allowOverlap && options.overlapChars > 0 ? trailingSentences(last.text, options.overlapChars) : "";
+    carried = tail ? { text: tail, page: last.page, section: last.section } : null;
+    current = [];
+  };
+
+  for (const unit of units) {
+    const sectionChanged = current.length > 0 && !sameSection(current[0]!.section, unit.section);
+    if (sectionChanged) flush(false);
+    else if (current.length > 0 && length() + unit.text.length > options.targetChars) flush(true);
+    // The carried overlap must never push a chunk past the hard limit.
+    if (carried && carried.text.length + 2 + unit.text.length > options.maxChars) carried = null;
+    if (carried && !sameSection(carried.section, unit.section)) carried = null;
+    current.push(unit);
+  }
+  flush(false);
+  return chunks;
+}
+
+const sameSection = (a: string[] | null, b: string[] | null) => (a ?? []).join("\u0000") === (b ?? []).join("\u0000");
+
+function toUnits(block: ExtractedBlock, maxChars: number): Unit[] {
+  const units: Unit[] = [];
+  for (const paragraph of block.text.split(/\n{2,}/)) {
+    const text = paragraph.trim();
+    if (!text) continue;
+    for (const piece of text.length <= maxChars ? [text] : splitLong(text, maxChars)) {
+      units.push({ text: piece, page: block.pageNumber, section: block.sectionPath });
+    }
+  }
+  return units;
+}
+
+/** Sentence boundaries for Latin and Hebrew text (both use . ! ?), plus line breaks. */
+const SENTENCE = /[^.!?\n]+(?:[.!?]+["'”’)\]]*|\n|$)\s*/g;
+
+function splitLong(text: string, maxChars: number): string[] {
+  const pieces: string[] = [];
+  let buffer = "";
+  const push = () => {
+    if (buffer.trim()) pieces.push(buffer.trim());
+    buffer = "";
+  };
+  for (const sentence of text.match(SENTENCE) ?? [text]) {
+    if (sentence.length > maxChars) {
+      push();
+      // A single sentence longer than the limit: split at whitespace.
+      let rest = sentence;
+      while (rest.length > maxChars) {
+        const cut = rest.lastIndexOf(" ", maxChars);
+        const at = cut > maxChars * 0.5 ? cut : maxChars;
+        pieces.push(rest.slice(0, at).trim());
+        rest = rest.slice(at);
+      }
+      buffer = rest;
+      continue;
+    }
+    if (buffer.length + sentence.length > maxChars) push();
+    buffer += sentence;
+  }
+  push();
+  return pieces;
+}
+
+function trailingSentences(text: string, maxChars: number): string {
+  const sentences = text.match(SENTENCE) ?? [];
+  let tail = "";
+  for (let i = sentences.length - 1; i >= 0; i--) {
+    const next = sentences[i]! + tail;
+    if (next.trim().length > maxChars) break;
+    tail = next;
+  }
+  // Do not duplicate the whole previous unit: overlap is only useful as a partial tail.
+  return tail.trim().length < text.trim().length ? tail.trim() : "";
+}

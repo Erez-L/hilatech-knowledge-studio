@@ -1,0 +1,19 @@
+{
+  "name": "@hks/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1169.0",
+    "@hks/shared": "workspace:*",
+    "mammoth": "^1.13.0",
+    "unpdf": "^2.2.1"
+  }
+}
