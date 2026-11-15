@@ -56,7 +56,7 @@ No prices are quoted here: the current figures are on https://aws.amazon.com/bed
 
 | | A. Reuse the existing Bedrock setup (same account, same Region, own role and bucket) | B. Separate configuration in the same account (other Region, own everything) | C. Independent supporting infrastructure (RDS, ElastiCache, own server) |
 |---|---|---|---|
-| New fixed monthly cost | None. A role, a policy, an empty bucket and two budgets cost nothing (the first two budgets of an account are free **[Doc]**) | None | Yes: database, cache and server instances are billed per hour whether used or not |
+| New fixed monthly cost | None. A role, a policy, an empty bucket and two budgets cost nothing (budgets that only monitor and notify are free without a limit on their number; only budgets with automated actions are charged, after the first two, at $0.10 per day each, and each emailed budget report costs $0.01 **[Doc]**, https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/) | None | Yes: database, cache and server instances are billed per hour whether used or not |
 | Model charges | Per token, on demand | The same per-token prices unless the Region differs | The same |
 | Embedding charges | Per token: once per document at ingestion, once per question | The same | The same |
 | S3 | Per GB stored and per request; negligible for twelve small sample files | The same | The same |
@@ -97,3 +97,9 @@ In this order, stopping at the first failure. Details and the environment variab
 6. `pnpm demo:seed`, then `pnpm evaluate -- --yes` — twelve documents and 46 questions. This is the only step whose result says anything about retrieval and answer quality.
 
 Open code issues that the run is expected to touch are listed in `docs/MILESTONE_2_PLAN.md` under "Known issues": the character-based length guard, S3 missing-object mapping, and the daily token budget not covering ingestion.
+
+## 8. Preflight addendum (2026-11-15, read-only)
+
+- **Claude model of the SaaS: still [Unverified].** It is not in IAM, Parameter Store or any other configuration visible in the console. Cost Explorer, filtered to Amazon Bedrock and grouped by usage type for May to October 2026, showed no Claude usage type; the SaaS server was created on 13 November, after that range, so this says nothing about the SaaS. The value has to be read from the SaaS application's own configuration (`LLM`/model setting on the server or in its repository). A model ID is not a secret.
+- **Two roles on one EC2 instance are not possible [Doc]:** an instance has one instance profile, and a profile holds one role. If both applications ever share the instance, the instance role should hold only `sts:AssumeRole` on two application roles, and each application assumes its own (`hilatech-saas-app`, `hilatech-knowledge-studio-app`) through the AWS SDK's `role_arn` + `credential_source = Ec2InstanceMetadata` profile. This separates permissions and audit trails, but not the applications from each other at the operating-system level: any process on the instance can reach the metadata service and assume either role. Real isolation needs separate instances or container task roles (ECS).
+- **The three code fixes named in section 7 are not implemented yet [Repo]:** the embeddings length guard still counts characters, the daily token budget is not checked before ingestion, and the S3 adapter does not map a 403 for a missing object. They are listed as open in `docs/MILESTONE_2_PLAN.md`.
