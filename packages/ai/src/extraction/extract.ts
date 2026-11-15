@@ -48,6 +48,7 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits): Promise<
     if (name === "PasswordException") throw new AppError("malformed_file", "The PDF is password-protected");
     throw new AppError("malformed_file", "The PDF could not be opened", { cause: error });
   }
+  pages = stripRunningLines(pages);
   const textChars = pages.reduce((sum, page) => sum + page.replace(/\s/g, "").length, 0);
   if (textChars < Math.max(40, totalPages * 15)) {
     throw new AppError("unsupported_scanned_pdf", "The PDF has no text layer. Scanned documents are not supported");
@@ -63,6 +64,26 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits): Promise<
       sectionPath: null,
     })),
   };
+}
+
+/**
+ * Removes running headers and footers: short lines that repeat on most pages
+ * once digits are ignored ("Handbook | Page 7"). Left in, they would be
+ * indexed dozens of times and quoted as if they were content.
+ */
+function stripRunningLines(pages: string[]): string[] {
+  if (pages.length < 3) return pages;
+  const key = (line: string) => line.trim().replace(/\d+/g, "#");
+  const seenOn = new Map<string, number>();
+  for (const page of pages) {
+    for (const k of new Set(page.split("\n").map(key))) {
+      if (k && k.length <= 120) seenOn.set(k, (seenOn.get(k) ?? 0) + 1);
+    }
+  }
+  const threshold = Math.max(3, Math.ceil(pages.length * 0.6));
+  const running = new Set([...seenOn].filter(([, count]) => count >= threshold).map(([k]) => k));
+  if (running.size === 0) return pages;
+  return pages.map((page) => page.split("\n").filter((line) => !running.has(key(line))).join("\n"));
 }
 
 /** DOCX: converted to simple HTML by mammoth, then walked block by block, tracking the heading trail. */

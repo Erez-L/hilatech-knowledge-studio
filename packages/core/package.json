@@ -1,0 +1,21 @@
+{
+  "name": "@hks/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
+    "@hks/ai": "workspace:*",
+    "@hks/database": "workspace:*",
+    "@hks/shared": "workspace:*",
+    "bullmq": "^6.7.6",
+    "drizzle-orm": "^0.45.4",
+    "ioredis": "^6.0.0"
+  }
+}

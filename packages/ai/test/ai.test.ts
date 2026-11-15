@@ -85,6 +85,9 @@ describe("extraction", () => {
     expect(page7.text).toContain("first response within 30 minutes");
     expect(doc.blocks.find((b) => b.pageNumber === 11)!.text).toContain("up to $400");
     expect(doc.blocks.find((b) => b.pageNumber === 8)!.text).not.toContain("up to $400");
+    // The running footer ("Customer Support Handbook | Page 7") is not content.
+    expect(doc.blocks.some((b) => /\| Page \d+/.test(b.text))).toBe(false);
+    expect(doc.blocks[0]!.text).toContain("Customer Support Handbook");
   });
 
   it("reads a DOCX with its heading trail", async () => {

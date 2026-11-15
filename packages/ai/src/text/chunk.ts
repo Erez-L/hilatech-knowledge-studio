@@ -25,8 +25,9 @@ export const chunkingVersion = (o: ChunkOptions) => `v1:${o.targetChars}/${o.max
  * - A paragraph longer than `targetChars` is split at sentence ends, and a
  *   sentence longer than that at whitespace. No chunk exceeds `maxChars`.
  * - A new section (heading trail) starts a new chunk.
- * - Consecutive chunks in the same section share up to `overlapChars` of
- *   trailing sentences, so a fact split across a boundary is still retrievable.
+ * - Consecutive chunks in the same section and on the same page share up to
+ *   `overlapChars` of trailing sentences, so a fact split across a boundary is
+ *   still retrievable. Overlap never crosses a page, which keeps citations exact.
  * - Page numbers are carried from extraction: `pageNumber` is the page where
  *   the chunk starts and `pageEnd` where it ends, when they differ.
  */
@@ -71,6 +72,8 @@ export function chunkBlocks(blocks: ExtractedBlock[], options: ChunkOptions): Ch
     // The carried overlap must never push a chunk past the hard limit.
     if (carried && carried.text.length + 2 + unit.text.length > options.maxChars) carried = null;
     if (carried && !sameSection(carried.section, unit.section)) carried = null;
+    // Overlap never crosses a page: a chunk's page number must describe all of its text start.
+    if (carried && carried.page !== unit.page) carried = null;
     current.push(unit);
   }
   flush(false);

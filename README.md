@@ -6,16 +6,11 @@ This is an independently developed demonstration product by HilaTech. The compan
 
 ## Status
 
-**Milestone 1 — design foundation.** Built and browser-tested:
+**Milestone 1 — design foundation: closed.** Design system, landing page and the Knowledge Workspace in sample-preview mode, in English and Hebrew. See `docs/MILESTONE_1_REPORT.md`.
 
-- Design system (tokens, light and dark themes, typography, motion, RTL/LTR)
-- Landing page, in English and Hebrew
-- Knowledge Workspace in **sample-preview mode**, in English and Hebrew
-- Contact form with client and server validation
+**Milestone 2 — real RAG: in progress.** The backend pipeline is built and tested: PostgreSQL + pgvector schema with row-level security, document extraction and chunking, a BullMQ ingestion worker, tenant-scoped retrieval, grounded answers with validated citations, persistence and deletion. It is tested end to end with **deterministic test doubles** in place of the embedding and chat models.
 
-**Not built yet:** database, authentication, document upload and ingestion, retrieval, live AI answers, the document library, conversation persistence. In sample-preview mode the workspace replays hand-written example answers from `apps/web/src/sample/northstar.ts`; nothing is sent to a model, and the interface says so on screen.
-
-See `docs/MILESTONE_1_REPORT.md` for exactly what was verified and what was not.
+**Not done yet:** authentication, the HTTP API, and wiring the interface to the backend. The workspace in the browser still shows pre-written samples and says so. **The pipeline has not been run against real model providers**, so it is not yet claimed to work as an AI product. See `docs/MILESTONE_2_PLAN.md`.
 
 ## Run it
 
@@ -32,6 +27,13 @@ Other commands:
 pnpm typecheck
 pnpm lint
 pnpm build && pnpm start
+```
+
+Backend tests need PostgreSQL 16 with pgvector and Redis:
+
+```bash
+bash scripts/dev-services.sh start   # host-installed services (see the script header)
+pnpm test                            # 65 tests: database, AI layer, end-to-end pipeline
 ```
 
 Browser checks (need Google Chrome and a running server on port 3100):
@@ -57,7 +59,14 @@ docs/                product, design and architecture documents
 artifacts/screenshots/  captured from the running app
 ```
 
-`apps/worker` and `packages/*` are described in `docs/ARCHITECTURE.md` and arrive with the functional milestone.
+```
+apps/worker/         ingestion worker process (BullMQ)
+packages/shared/     configuration, error codes, logging
+packages/database/   migrations, typed schema, tenant-scoped repositories
+packages/ai/         provider adapters, extraction, chunking, prompt, citation filter
+packages/core/       upload, ingestion, answering, storage, queue
+samples/northstar/   fictional sample documents (built by scripts/build-sample-documents.py)
+```
 
 ## Documents
 
