@@ -1,6 +1,7 @@
 import { AppError, isAppError } from "@hks/shared";
 import { normalizeForDisplay } from "../text/normalize.ts";
 import { inspectZip } from "./detect.ts";
+import { loadPdfLibrary } from "./pdf-library.ts";
 import { DEFAULT_EXTRACTION_LIMITS, type ExtractedBlock, type ExtractedDocument, type ExtractionLimits, type FileType } from "./types.ts";
 
 /** Extracts text with page or section locations. Throws AppError with a stable code on failure. */
@@ -35,7 +36,7 @@ export async function extractDocument(
  * (scripts/check-samples.ts). Hebrew PDFs from other producers are not verified.
  */
 async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits): Promise<ExtractedDocument> {
-  const { extractText: pdfText, getDocumentProxy } = await import("unpdf");
+  const { extractText: pdfText, getDocumentProxy } = await loadPdfLibrary();
   let pages: string[];
   let totalPages: number;
   try {

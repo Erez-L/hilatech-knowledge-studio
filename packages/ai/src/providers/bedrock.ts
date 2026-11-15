@@ -57,7 +57,11 @@ export class BedrockChatModel implements ChatModelProvider {
           outputTokens = event.metadata.usage.outputTokens ?? null;
         }
         const failure =
-          event.internalServerException ?? event.modelStreamErrorException ?? event.throttlingException ?? event.validationException;
+          event.internalServerException ??
+          event.modelStreamErrorException ??
+          event.throttlingException ??
+          event.validationException ??
+          event.serviceUnavailableException;
         if (failure) throw failure;
       }
       yield { type: "done", inputTokens, outputTokens, stopReason };

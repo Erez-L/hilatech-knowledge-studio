@@ -134,8 +134,43 @@ describe("extraction", () => {
   });
 });
 
+describe("PDF library side effects", () => {
+  it("leaves base64url encoding correct after a PDF was opened (signed links depend on it)", async () => {
+    await extractDocument(await sample("refund-and-cancellation-policy.pdf"), "pdf");
+    const bytes = new Uint8Array([251, 255, 190, 1]);
+    const proto = Uint8Array.prototype as unknown as { toBase64?: (o?: object) => string };
+    const ctor = Uint8Array as unknown as { fromBase64?: (s: string, o?: object) => Uint8Array };
+    // On runtimes without these methods the PDF library adds them; either way they must honour the options.
+    if (proto.toBase64) {
+      expect(proto.toBase64.call(bytes, { alphabet: "base64url", omitPadding: true })).toBe("-_--AQ");
+      expect(proto.toBase64.call(bytes, { alphabet: "base64url" })).toBe("-_--AQ==");
+      expect(proto.toBase64.call(bytes)).toBe("+/++AQ==");
+      expect(proto.toBase64.call(bytes, { omitPadding: true })).toBe("+/++AQ");
+    }
+    if (ctor.fromBase64) {
+      expect([...ctor.fromBase64("-_--AQ", { alphabet: "base64url" })]).toEqual([...bytes]);
+      expect([...ctor.fromBase64("+/++AQ==")]).toEqual([...bytes]);
+      expect(() => ctor.fromBase64!("+/++AQ==", { alphabet: "base64url" })).toThrow();
+    }
+  });
+});
+
 describe("chunking", () => {
   const options = { targetChars: 400, maxChars: 600, overlapChars: 120 };
+
+  it("never lets a chunk span two pages, at the default sizes too, so a cited page holds the cited text", async () => {
+    const doc = await extractDocument(await sample("customer-support-handbook.pdf"), "pdf");
+    for (const sizes of [options, { targetChars: 1200, maxChars: 1800, overlapChars: 200 }]) {
+      const chunks = chunkBlocks(doc.blocks, sizes);
+      expect(chunks.every((c) => c.pageEnd === null)).toBe(true);
+      expect(chunks.find((c) => c.text.includes("first response within 30 minutes"))!.pageNumber).toBe(7);
+      expect(chunks.find((c) => c.text.includes("up to $400"))!.pageNumber).toBe(11);
+      const pageSeven = doc.blocks.filter((b) => b.pageNumber === 7).map((b) => b.text).join(" ");
+      for (const chunk of chunks.filter((c) => c.pageNumber === 7)) {
+        expect(pageSeven.replace(/\s+/g, " ")).toContain(chunk.text.replace(/\s+/g, " ").slice(0, 60));
+      }
+    }
+  });
 
   it("keeps page numbers, never exceeds the maximum, and covers the text", async () => {
     const doc = await extractDocument(await sample("customer-support-handbook.pdf"), "pdf");
@@ -144,7 +179,7 @@ describe("chunking", () => {
     expect(Math.max(...chunks.map((c) => c.text.length))).toBeLessThanOrEqual(options.maxChars);
     expect(chunks.map((c) => c.chunkIndex)).toEqual(chunks.map((_, i) => i));
     const target = chunks.find((c) => c.text.includes("first response within 30 minutes"))!;
-    expect(target.pageNumber === 7 || (target.pageNumber === 6 && target.pageEnd === 7)).toBe(true);
+    expect(target.pageNumber).toBe(7);
     for (const phrase of ["up to $400", "duty manager", "complaints register", "5 business days after the last message"]) {
       expect(chunks.some((c) => c.text.includes(phrase)), phrase).toBe(true);
     }

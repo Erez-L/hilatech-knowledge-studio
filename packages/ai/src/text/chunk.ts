@@ -16,7 +16,7 @@ export type Chunk = {
 
 type Unit = { text: string; page: number | null; section: string[] | null };
 
-export const chunkingVersion = (o: ChunkOptions) => `v1:${o.targetChars}/${o.maxChars}/${o.overlapChars}`;
+export const chunkingVersion = (o: ChunkOptions) => `v2:${o.targetChars}/${o.maxChars}/${o.overlapChars}`;
 
 /**
  * Structure-aware chunking.
@@ -24,12 +24,14 @@ export const chunkingVersion = (o: ChunkOptions) => `v1:${o.targetChars}/${o.max
  * - Text is packed paragraph by paragraph up to `targetChars`.
  * - A paragraph longer than `targetChars` is split at sentence ends, and a
  *   sentence longer than that at whitespace. No chunk exceeds `maxChars`.
- * - A new section (heading trail) starts a new chunk.
+ * - A new section (heading trail) starts a new chunk, and so does a new page:
+ *   a chunk never spans two pages, so the page a citation shows is the page
+ *   that holds the cited text.
  * - Consecutive chunks in the same section and on the same page share up to
  *   `overlapChars` of trailing sentences, so a fact split across a boundary is
  *   still retrievable. Overlap never crosses a page, which keeps citations exact.
- * - Page numbers are carried from extraction: `pageNumber` is the page where
- *   the chunk starts and `pageEnd` where it ends, when they differ.
+ * - Page numbers are carried from extraction. `pageEnd` is kept for stored
+ *   chunks of earlier versions and is always null here.
  */
 export function chunkBlocks(blocks: ExtractedBlock[], options: ChunkOptions): Chunk[] {
   if (options.overlapChars > options.maxChars - options.targetChars) {
@@ -67,7 +69,8 @@ export function chunkBlocks(blocks: ExtractedBlock[], options: ChunkOptions): Ch
 
   for (const unit of units) {
     const sectionChanged = current.length > 0 && !sameSection(current[0]!.section, unit.section);
-    if (sectionChanged) flush(false);
+    const pageChanged = current.length > 0 && current[0]!.page !== unit.page;
+    if (sectionChanged || pageChanged) flush(false);
     else if (current.length > 0 && length() + unit.text.length > options.targetChars) flush(true);
     // The carried overlap must never push a chunk past the hard limit.
     if (carried && carried.text.length + 2 + unit.text.length > options.maxChars) carried = null;

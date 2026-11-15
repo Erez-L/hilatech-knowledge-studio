@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { Suspense } from "react";
 import { AskWorkspace } from "@/components/app/ask-workspace";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -9,9 +8,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 export default function AppPage() {
-  return (
-    <Suspense>
-      <AskWorkspace />
-    </Suspense>
-  );
+  // Rendered per request (see the layout), so no Suspense boundary is needed for the search parameters,
+  // and the workspace hydrates together with its provider.
+  return <AskWorkspace />;
 }

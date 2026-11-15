@@ -67,6 +67,11 @@ const EXCERPT_CHARS = 900;
  * When no retrieved passage clears the evidence threshold the model is not
  * called at all, and the answer is recorded as insufficient evidence.
  */
+/** Stop reasons (Anthropic and Bedrock Converse spellings) after which the text must not be presented as a finished answer. */
+const INCOMPLETE_STOP_REASONS: ReadonlySet<string> = new Set([
+  "max_tokens", "refusal", "model_context_window_exceeded", "content_filtered", "guardrail_intervened",
+]);
+
 export async function* answerQuestion(
   services: Services,
   ctx: TenantContext,
@@ -215,6 +220,10 @@ export async function* answerQuestion(
       else {
         inputTokens = event.inputTokens;
         outputTokens = event.outputTokens;
+        // A reply that was cut off, refused or filtered is not a complete answer, even though the request succeeded.
+        if (event.stopReason && INCOMPLETE_STOP_REASONS.has(event.stopReason)) {
+          throw new AppError("provider_error", `The model stopped early (${event.stopReason})`);
+        }
       }
     }
   } catch (error) {
