@@ -7,6 +7,7 @@ import {
   bigint,
   boolean,
   customType,
+  date,
   integer,
   jsonb,
   pgTable,
@@ -267,6 +268,18 @@ export const citations = pgTable("citations", {
   sourceState: text("source_state").$type<"available" | "removed">().notNull().default("available"),
   createdAt: createdAt(),
 });
+
+export const aiBudgetDays = pgTable(
+  "ai_budget_days",
+  {
+    organizationId: uuid("organization_id").notNull(),
+    day: date("day").notNull(),
+    inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+    outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.day] })],
+);
 
 export const usageEvents = pgTable("usage_events", {
   id: id(),

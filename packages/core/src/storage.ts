@@ -65,12 +65,22 @@ export class LocalFileStorage implements ObjectStorage {
  */
 export class S3Storage implements ObjectStorage {
   private clientPromise: Promise<import("@aws-sdk/client-s3").S3Client> | undefined;
-  constructor(private readonly options: { bucket: string; region?: string; endpoint?: string; forcePathStyle?: boolean }) {}
+  constructor(
+    private readonly options: {
+      bucket: string;
+      region?: string;
+      endpoint?: string;
+      forcePathStyle?: boolean;
+      /** Test seam: anything with the SDK client's `send`. */
+      client?: { send: (command: never) => Promise<unknown> };
+    },
+  ) {}
 
   private async sdk() {
     const s3 = await import("@aws-sdk/client-s3");
     this.clientPromise ??= Promise.resolve(
-      new s3.S3Client({ region: this.options.region, endpoint: this.options.endpoint, forcePathStyle: this.options.forcePathStyle }),
+      (this.options.client as unknown as import("@aws-sdk/client-s3").S3Client | undefined) ??
+        new s3.S3Client({ region: this.options.region, endpoint: this.options.endpoint, forcePathStyle: this.options.forcePathStyle }),
     );
     return { s3, client: await this.clientPromise };
   }
@@ -80,7 +90,7 @@ export class S3Storage implements ObjectStorage {
     const { s3, client } = await this.sdk();
     await client.send(
       new s3.PutObjectCommand({ Bucket: this.options.bucket, Key: key, Body: bytes, ContentType: contentType, ServerSideEncryption: "AES256" }),
-    );
+    ).catch((error) => { throw storageFailure(error, "write"); });
   }
   async get(key: string) {
     assertKey(key);
@@ -89,20 +99,68 @@ export class S3Storage implements ObjectStorage {
       const response = await client.send(new s3.GetObjectCommand({ Bucket: this.options.bucket, Key: key }));
       return await response.Body!.transformToByteArray();
     } catch (error) {
-      if ((error as { name?: string }).name === "NoSuchKey") throw new AppError("not_found", "Stored file not found");
-      throw error;
+      if (isMissingObject(error)) throw new AppError("not_found", "Stored file not found");
+      throw storageFailure(error, "read");
     }
   }
   async delete(key: string) {
     assertKey(key);
     const { s3, client } = await this.sdk();
-    await client.send(new s3.DeleteObjectCommand({ Bucket: this.options.bucket, Key: key }));
+    // S3 answers 204 whether or not the key existed, so a missing object is not an error here.
+    await client.send(new s3.DeleteObjectCommand({ Bucket: this.options.bucket, Key: key })).catch((error) => {
+      if (isMissingObject(error)) return;
+      throw storageFailure(error, "delete");
+    });
   }
   async exists(key: string) {
     assertKey(key);
     const { s3, client } = await this.sdk();
-    return client.send(new s3.HeadObjectCommand({ Bucket: this.options.bucket, Key: key })).then(() => true, () => false);
+    try {
+      await client.send(new s3.HeadObjectCommand({ Bucket: this.options.bucket, Key: key }));
+      return true;
+    } catch (error) {
+      // False only when S3 says the object is absent. Anything else (denied, wrong region, network)
+      // is unknown, and reporting it as "absent" would hide a broken configuration.
+      if (isMissingObject(error)) return false;
+      throw storageFailure(error, "check");
+    }
   }
+}
+
+type SdkError = { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+
+/**
+ * True only when S3 definitively reports that the object does not exist: NoSuchKey from GetObject,
+ * or 404 / NotFound from HeadObject (which has no error body). A missing bucket is NOT a missing object.
+ */
+function isMissingObject(error: unknown): boolean {
+  const e = error as SdkError;
+  const name = e?.name ?? e?.Code;
+  if (name === "NoSuchBucket") return false;
+  return name === "NoSuchKey" || name === "NotFound" || e?.$metadata?.httpStatusCode === 404;
+}
+
+/**
+ * Turns any other S3 failure into an error that says what to fix. 403 is never read as "missing":
+ * without s3:ListBucket, S3 answers 403 for a key that does not exist, and also for a real denial,
+ * and the two cannot be told apart from the response.
+ */
+function storageFailure(error: unknown, action: "read" | "write" | "delete" | "check"): AppError {
+  const e = error as SdkError;
+  const name = e?.name ?? e?.Code ?? "UnknownError";
+  const status = e?.$metadata?.httpStatusCode;
+  const hint =
+    status === 403 || /AccessDenied|Forbidden|InvalidAccessKeyId|SignatureDoesNotMatch|ExpiredToken|CredentialsProviderError|UnrecognizedClient/.test(name)
+      ? "access was denied or the credentials are invalid. Check the credentials and the IAM policy; s3:ListBucket on the bucket is needed for S3 to report a missing object as missing"
+      : status === 301 || /PermanentRedirect|AuthorizationHeaderMalformed|IllegalLocationConstraint/.test(name)
+        ? "the bucket is in a different Region. Check S3_REGION"
+        : name === "NoSuchBucket"
+          ? "the bucket does not exist. Check S3_BUCKET"
+          : status === undefined
+            ? "the storage service could not be reached"
+            : "the storage service returned an error";
+  // The message never includes the object key (it contains tenant ids) or the SDK's own message.
+  return new AppError("internal", `Document storage ${action} failed (${name}${status ? `, HTTP ${status}` : ""}): ${hint}`, { cause: error });
 }
 
 export function createStorage(config: Config): ObjectStorage {

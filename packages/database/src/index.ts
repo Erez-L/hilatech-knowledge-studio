@@ -9,5 +9,6 @@ export * from "./documents.ts";
 export * from "./retrieval.ts";
 export * from "./conversations.ts";
 export * from "./usage.ts";
+export * from "./budget.ts";
 export * from "./users.ts";
 export { sql } from "drizzle-orm";

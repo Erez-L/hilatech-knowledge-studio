@@ -48,12 +48,15 @@ Every answer and every vector in the tests comes from **deterministic test doubl
 
 | Area | Issue |
 |---|---|
-| Bedrock embeddings | The length guard counts characters; the service limit is 512 tokens per text and the request uses `truncate: "NONE"`. Hebrew chunks near `CHUNK_MAX_CHARS` may exceed it and fail ingestion. `docs/RAG_PIPELINE.md` describes splitting an over-long chunk and retrying; that code does not exist yet. The live embeddings test measures where the limit falls |
-| S3 storage | Without `s3:ListBucket`, S3 answers 403 for a missing object, which the adapter does not map to "not found" |
 | Bedrock region | One region is used for both models. Cohere Embed Multilingual v3 is not offered in every region (not in il-central-1) |
-| Daily token budget | Counts estimated embedding tokens together with chat input, and is checked before questions only, not before ingestion |
 | `docs/DEPLOYMENT.md` | The Bedrock model-access steps predate the current AWS behaviour (first invocation of a third-party model needs AWS Marketplace permissions) |
 | Members | The members API exists and is tested; there is no members screen yet |
+
+### Hardening after checkpoint 6 (code and automated tests only; nothing was run against AWS)
+
+- **Embedding token limit.** Cohere Embed Multilingual v3 accepts 512 tokens per text and the request never lets the service truncate. Chunks are now sized before embedding with a deliberately high local token estimate (target 400 tokens: one token per 3 Latin characters, per 1.5 characters of Hebrew or any other script, per punctuation mark). A chunk that does not fit is split at sentence ends, then at whitespace, keeping its page and section; the pieces are stored and each vector belongs to exactly the stored piece. If the provider still rejects a passage, the batch is retried one passage at a time, the offender is split in two, at most three levels deep, and then the document fails with a clear reason. **The estimate is not Cohere's tokenizer and has not been compared with it**; the live embeddings test measures the real limit.
+- **Daily AI budget.** New table `ai_budget_days` (migration `0003`, row-level security). Every provider call is preceded by an atomic reservation in one conditional SQL statement, so concurrent workers cannot overspend: document embedding (uploads, retries, demo seeding), query embedding and chat. A question reserves its worst case and is reconciled to the tokens the model reports; a reservation is released only when nothing was sent; every retry reserves again. An exhausted budget fails the document or the question with `budget_exceeded` and is not retried automatically. Budgets are per organization and reset at midnight UTC. Test doubles are counted with estimated tokens.
+- **S3 errors.** `exists()` is false only for a definite 404; `get()` reports `not_found` only for `NoSuchKey`; a 403, invalid credentials, a wrong Region, a missing bucket and network failures are raised as errors that say what to check, and never contain the object key. Tested with stubbed SDK responses only.
 
 ### Fixed during checkpoint 6
 
@@ -99,7 +102,7 @@ The mandatory flow, step by step:
 
 | Suite | Command | Result |
 |---|---|---|
-| Unit and integration (database, AI layer, pipeline) | `pnpm test` | 68 passed |
+| Unit and integration (database, AI layer, pipeline, storage) | `pnpm test` | 95 passed |
 | HTTP, against a production build with the worker, PostgreSQL and Redis | `bash scripts/http-tests.sh` | 58 passed |
 | Browser (Chrome through Playwright, with axe) | `bash scripts/ui-checks.sh` | 75 passed |
 | Evaluation set, 46 questions, test doubles | `pnpm demo:seed && pnpm evaluate` | Runs end to end; the numbers are not quality evidence |

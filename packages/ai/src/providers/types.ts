@@ -18,6 +18,13 @@ export interface EmbeddingsProvider {
   readonly descriptor: EmbeddingsDescriptor;
   /** Maximum characters accepted per text; longer input is rejected, not silently truncated. */
   readonly maxCharsPerText: number;
+  /**
+   * Token limit per text, when the model has one, with a CONSERVATIVE local estimate of a text's
+   * token count. The estimate is not the provider's tokenizer: callers size text with it and must
+   * still be ready for the provider to reject a text (see EmbeddingInputTooLongError).
+   */
+  readonly maxTokensPerText?: number;
+  estimateTokens?(text: string): number;
   /** Embeds passages for storage. Result order matches input order. */
   embedDocuments(texts: string[], signal?: AbortSignal): Promise<number[][]>;
   /** Embeds a question for retrieval (models may treat queries differently from passages). */
@@ -40,4 +47,16 @@ export interface ChatModelProvider {
   readonly descriptor: ProviderDescriptor;
   /** Streams the answer as text deltas, ending with exactly one `done` event. */
   streamAnswer(request: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatEvent>;
+}
+
+/**
+ * The provider refused one or more texts as too long. Nothing was truncated and
+ * nothing was embedded for this call; the caller may split the text and retry.
+ */
+export class EmbeddingInputTooLongError extends Error {
+  readonly code = "embedding_failed" as const;
+  constructor(message: string, readonly source: "local_guard" | "provider") {
+    super(message);
+    this.name = "EmbeddingInputTooLongError";
+  }
 }

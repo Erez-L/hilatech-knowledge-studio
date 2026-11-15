@@ -139,3 +139,21 @@ function trailingSentences(text: string, maxChars: number): string {
   // Do not duplicate the whole previous unit: overlap is only useful as a partial tail.
   return tail.trim().length < text.trim().length ? tail.trim() : "";
 }
+
+/**
+ * Splits one chunk into smaller chunks that each satisfy `fits`, at sentence ends where possible
+ * and at whitespace otherwise. Page number and section are inherited, so a citation of any piece
+ * still points at the right place. Pieces do not overlap and together contain all of the text.
+ * `chunkIndex` is left for the caller to renumber. Returns the chunk itself when it already fits.
+ */
+export function splitChunkToFit(chunk: Chunk, fits: (text: string) => boolean, minChars = 40): Chunk[] {
+  if (fits(chunk.text) || chunk.text.length <= minChars) return [chunk];
+  const half = Math.ceil(chunk.text.length / 2);
+  const pieces = splitLong(chunk.text, Math.max(minChars, half));
+  // A text with no usable break (returned whole) is cut in the middle.
+  const parts = pieces.length > 1 ? pieces : [chunk.text.slice(0, half), chunk.text.slice(half)];
+  return parts
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .flatMap((text) => splitChunkToFit({ ...chunk, text, searchText: normalizeForSearch(text), tokenEstimate: estimateTokens(text) }, fits, minChars));
+}

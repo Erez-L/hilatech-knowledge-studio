@@ -10,6 +10,9 @@ import {
   buildGroundedRequest,
   chunkBlocks,
   CitationStreamFilter,
+  EmbeddingInputTooLongError,
+  estimateCohereTokens,
+  splitChunkToFit,
   createChatModel,
   createEmbeddingsProvider,
   detectFileType,
@@ -131,6 +134,58 @@ describe("extraction", () => {
 
   it("enforces the page limit", async () => {
     expect(await codeOf(extractDocument(await sample("customer-support-handbook.pdf"), "pdf", { maxPages: 5, maxChars: 1e6 }))).toBe("too_many_pages");
+  });
+});
+
+describe("Cohere token estimate and chunk splitting", () => {
+  const hebrew = "לקוחות בתוכנית זכאים להחזר מלא בתוך שלושים יום ממועד הרכישה. ";
+  it("is conservative: never below one token per 4 Latin characters or per 2 Hebrew characters", () => {
+    const english = "Annual plans are refunded in full within thirty days of purchase. ".repeat(20);
+    expect(estimateCohereTokens(english)).toBeGreaterThan(english.replace(/\s/g, "").length / 4);
+    const he = hebrew.repeat(20);
+    expect(estimateCohereTokens(he)).toBeGreaterThan(he.replace(/\s/g, "").length / 2);
+    expect(estimateCohereTokens("")).toBe(2);
+    expect(estimateCohereTokens("a")).toBe(3);
+  });
+
+  it("sizes Hebrew text to fewer characters than English for the same limit, and mixed text in between", () => {
+    const perChar = (text: string) => estimateCohereTokens(text.repeat(30)) / (text.length * 30);
+    const english = perChar("Refunds are approved by the team lead. ");
+    const mixed = perChar("תוכנית Bookkeeping Growth עולה $640 לחודש. ");
+    expect(perChar(hebrew)).toBeGreaterThan(mixed);
+    expect(mixed).toBeGreaterThan(english);
+  });
+
+  it("the adapter refuses an over-long text locally, as a typed error, instead of sending or truncating it", async () => {
+    let sent = 0;
+    const embeddings = new BedrockCohereEmbeddings({ region: "us-east-1", modelId: "cohere.embed-multilingual-v3", dimensions: 1024, batchSize: 96, client: { send: async () => (sent++, {}) } as never });
+    expect(embeddings.maxTokensPerText).toBeLessThan(512);
+    await expect(embeddings.embedDocuments(["ok", "x".repeat(2049)])).rejects.toBeInstanceOf(EmbeddingInputTooLongError);
+    expect(sent).toBe(0);
+    const rejecting = new BedrockCohereEmbeddings({ region: "us-east-1", modelId: "cohere.embed-multilingual-v3", dimensions: 1024, batchSize: 96, client: { send: async () => { throw Object.assign(new Error("Too many tokens"), { name: "ValidationException" }); } } as never });
+    await expect(rejecting.embedDocuments(["text"])).rejects.toMatchObject({ name: "EmbeddingInputTooLongError", source: "provider" });
+    const throttled = new BedrockCohereEmbeddings({ region: "us-east-1", modelId: "cohere.embed-multilingual-v3", dimensions: 1024, batchSize: 96, client: { send: async () => { throw Object.assign(new Error("slow down"), { name: "ThrottlingException" }); } } as never });
+    await expect(throttled.embedDocuments(["text"])).rejects.toMatchObject({ code: "embedding_failed", name: expect.not.stringMatching("EmbeddingInputTooLongError") });
+  });
+
+  it("splits a chunk into pieces that fit, keeping page, section and every character of text", () => {
+    const text = hebrew.repeat(15).trim();
+    const chunk = { chunkIndex: 4, text, searchText: text, pageNumber: 7, pageEnd: null, sectionPath: ["החזרים"], tokenEstimate: 1, chunkingVersion: "v2" };
+    const limit = 120;
+    const pieces = splitChunkToFit(chunk, (t) => estimateCohereTokens(t) <= limit);
+    expect(pieces.length).toBeGreaterThan(1);
+    for (const piece of pieces) {
+      expect(estimateCohereTokens(piece.text)).toBeLessThanOrEqual(limit);
+      expect(piece).toMatchObject({ pageNumber: 7, pageEnd: null, sectionPath: ["החזרים"] });
+    }
+    expect(pieces.map((p) => p.text).join(" ").replace(/\s+/g, " ")).toBe(text.replace(/\s+/g, " "));
+    // Boundaries: a text exactly at the limit is not split; one with no spaces is still split, without loss.
+    const exact = "a".repeat(30);
+    expect(splitChunkToFit({ ...chunk, text: exact }, (t) => t.length <= 30)).toHaveLength(1);
+    const solid = "א".repeat(500);
+    const cut = splitChunkToFit({ ...chunk, text: solid }, (t) => t.length <= 100);
+    expect(cut.every((p) => p.text.length <= 100)).toBe(true);
+    expect(cut.map((p) => p.text).join("")).toBe(solid);
   });
 });
 

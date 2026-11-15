@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   chunkBlocks,
+  EmbeddingInputTooLongError,
+  splitChunkToFit,
   detectFileType,
   detectLanguage,
   extractDocument,
@@ -25,11 +27,13 @@ import {
 import { AppError, isAppError, log, type ErrorCode } from "@hks/shared";
 import { actorFields, type Actor, type IngestionJobData, type Services } from "./services.ts";
 import { newStorageKey } from "./storage.ts";
+import { reserveAiBudget, settleAiBudget } from "./budget.ts";
 
 /** Failures that will not succeed on retry: the file itself is the problem. */
 const PERMANENT: ReadonlySet<ErrorCode> = new Set([
   "unsupported_file_type", "unsupported_scanned_pdf", "malformed_file", "duplicate_document",
   "extraction_failed", "too_many_pages", "payload_too_large", "not_found", "not_configured",
+  "budget_exceeded", // retrying today cannot help; the owner retries after the budget resets
 ]);
 export const isPermanentFailure = (error: unknown) => isAppError(error) && PERMANENT.has(error.code);
 
@@ -157,9 +161,32 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
 
     await step("embedding", 45);
     const index = await ensureActiveEmbeddingIndex(db, embeddings.descriptor);
-    const vectors = await embedInBatches(services, chunks, async (done) => {
-      await step("embedding", 45 + Math.round((done / chunks.length) * 45));
-    });
+    // Size every chunk to the model's token limit first (a conservative estimate, see the provider).
+    const fits = (text: string) =>
+      text.length <= embeddings.maxCharsPerText &&
+      (!embeddings.estimateTokens || !embeddings.maxTokensPerText || embeddings.estimateTokens(text) <= embeddings.maxTokensPerText);
+    const sized = chunks.flatMap((chunk) => splitChunkToFit(chunk, fits));
+    // Reserve the whole document's estimated tokens before the first call. Every attempt reserves
+    // again, so a retry can only spend what the budget still allows.
+    const reservation = await reserveAiBudget(
+      services, ctx.organizationId, { inputTokens: sized.reduce((sum, chunk) => sum + chunk.tokenEstimate, 0), outputTokens: 0 }, "indexing this document",
+    );
+    const progress = { called: false };
+    let embedded: { chunk: Chunk; vector: number[] }[];
+    try {
+      embedded = await embedAdaptively(services, sized, progress, async (done) => {
+        await step("embedding", 45 + Math.round((done / sized.length) * 45));
+      });
+    } catch (error) {
+      // Nothing was sent: give the reservation back. Otherwise keep it, since the provider may have charged.
+      if (!progress.called) await settleAiBudget(services, reservation, { inputTokens: 0, outputTokens: 0 });
+      throw error;
+    }
+    // What is stored is exactly what was embedded: one vector per final chunk, renumbered in order.
+    chunks.length = 0;
+    chunks.push(...embedded.map(({ chunk }, i) => ({ ...chunk, chunkIndex: i })));
+    const vectors = embedded.map(({ vector }) => vector);
+    await settleAiBudget(services, reservation, { inputTokens: chunks.reduce((sum, chunk) => sum + chunk.tokenEstimate, 0), outputTokens: 0 });
 
     await step("persisting", 92);
     await tenant(async (tx) => {
@@ -211,26 +238,54 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
   }
 }
 
-async function embedInBatches(services: Services, chunks: Chunk[], onProgress: (done: number) => Promise<void>) {
+/** How many times one passage may be split further after the provider itself rejects it as too long. */
+const MAX_PROVIDER_SPLITS = 3;
+
+/**
+ * Embeds chunks in batches. When the provider rejects a batch as too long, the batch is retried
+ * one chunk at a time to find the offender, and that chunk is split in two and retried, at most
+ * MAX_PROVIDER_SPLITS levels deep; after that the document fails. Text is never truncated, and
+ * each returned vector belongs to exactly the chunk it is paired with.
+ */
+async function embedAdaptively(services: Services, chunks: Chunk[], progress: { called: boolean }, onProgress: (done: number) => Promise<void>) {
   const embeddings = services.embeddings!;
   const size = services.config.EMBEDDINGS_BATCH_SIZE;
-  const vectors: number[][] = [];
-  for (let start = 0; start < chunks.length; start += size) {
-    const batch = chunks.slice(start, start + size);
+  const out: { chunk: Chunk; vector: number[] }[] = [];
+
+  const embed = async (batch: Chunk[], depth: number): Promise<{ chunk: Chunk; vector: number[] }[]> => {
     let result: number[][];
     try {
+      progress.called = true;
       result = await embeddings.embedDocuments(batch.map((chunk) => chunk.text));
     } catch (error) {
+      if (error instanceof EmbeddingInputTooLongError) {
+        if (batch.length > 1) {
+          const each: { chunk: Chunk; vector: number[] }[] = [];
+          for (const chunk of batch) each.push(...(await embed([chunk], depth)));
+          return each;
+        }
+        const halves = depth < MAX_PROVIDER_SPLITS ? splitChunkToFit(batch[0]!, (text) => text.length <= Math.ceil(batch[0]!.text.length / 2)) : [];
+        if (halves.length > 1) {
+          const pieces: { chunk: Chunk; vector: number[] }[] = [];
+          for (const half of halves) pieces.push(...(await embed([half], depth + 1)));
+          return pieces;
+        }
+        throw new AppError("embedding_failed", "A passage is too long for the embeddings model and could not be split further", { cause: error });
+      }
       if (isAppError(error)) throw error;
       throw new AppError("embedding_failed", "The embeddings provider failed", { cause: error });
     }
     if (result.length !== batch.length || result.some((v) => v.length !== embeddings.descriptor.dimensions)) {
       throw new AppError("embedding_failed", "The embeddings provider returned an unexpected result");
     }
-    vectors.push(...result);
-    await onProgress(vectors.length);
+    return batch.map((chunk, i) => ({ chunk, vector: result[i]! }));
+  };
+
+  for (let start = 0; start < chunks.length; start += size) {
+    out.push(...(await embed(chunks.slice(start, start + size), 0)));
+    await onProgress(Math.min(start + size, chunks.length));
   }
-  return vectors;
+  return out;
 }
 
 function uniqueViolation(error: unknown, constraint: string): boolean {

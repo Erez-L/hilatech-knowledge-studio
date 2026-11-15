@@ -5,10 +5,21 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 // `sql` comes from @hks/database so every package shares one drizzle-orm instance.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DeterministicChatModel, DeterministicEmbeddings, type ChatEvent, type ChatModelProvider } from "@hks/ai";
 import {
+  DeterministicChatModel,
+  DeterministicEmbeddings,
+  EmbeddingInputTooLongError,
+  estimateCohereTokens,
+  type ChatEvent,
+  type ChatModelProvider,
+  type EmbeddingsProvider,
+} from "@hks/ai";
+import {
+  budgetUsed,
   createDatabase,
   createOrganizationWithOwner,
+  reserveBudget,
+  settleBudget,
   createUser,
   getDocument,
   latestIngestionJob,
@@ -27,10 +38,13 @@ import {
   BullJobQueue,
   createIngestionWorker,
   deleteDocument,
+  ingestDocument,
+  isPermanentFailure,
   LocalFileStorage,
   retryIngestion,
   uploadDocument,
   type AnswerEvent,
+  type IngestionJobData,
   type Services,
 } from "../src/index.ts";
 
@@ -54,7 +68,7 @@ let storageDir: string;
 let a: TenantContext & { userId: string };
 let b: TenantContext & { userId: string };
 
-const config = parseConfig({
+const baseEnv = {
   APP_ENV: "test",
   LLM_PROVIDER: "deterministic",
   EMBEDDINGS_PROVIDER: "deterministic",
@@ -65,7 +79,8 @@ const config = parseConfig({
   CHUNK_MAX_CHARS: "800",
   CHUNK_OVERLAP_CHARS: "100",
   UPLOAD_MAX_BYTES: String(2 * 1024 * 1024),
-});
+};
+const config = parseConfig(baseEnv);
 
 async function tenant(name: string) {
   const user = await createUser(database.db, { email: `${name}-${randomUUID()}@example.test`, name, passwordHash: "x", locale: "en" });
@@ -384,5 +399,210 @@ describe("deletion", () => {
     const thread = await withTenant(database.db, a.organizationId, (tx) => listMessages(tx, a, before.start!.conversationId));
     expect(thread[1]!.citations[0]).toMatchObject({ sourceState: "removed", excerpt: null, chunkId: null, documentTitle: "Temporary notice" });
     expect(await codeOf(deleteDocument(services, b, { kind: "user", userId: b.userId }, doc.id, "c"))).toBe("not_found");
+  });
+});
+
+/* ------------------------------------------------------------------ hardening: token limits and the daily AI budget */
+
+/** Runs ingestion in this process with the given services, bypassing the shared worker. */
+async function ingestInline(custom: Services, ctx: TenantContext & { userId: string }, filename: string, text: string, attempts = 1) {
+  const jobs: IngestionJobData[] = [];
+  const inline: Services = { ...custom, queue: { enqueueIngestion: async (data) => void jobs.push(data) } };
+  const document = await uploadDocument(inline, ctx, { kind: "user", userId: ctx.userId }, { filename, bytes: new TextEncoder().encode(text), correlationId: randomUUID() });
+  const errors: string[] = [];
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await ingestDocument(inline, jobs[0]!, { attempt, finalAttempt: attempt === attempts });
+      break;
+    } catch (error) {
+      errors.push((error as { code?: string }).code ?? String(error));
+      if (isPermanentFailure(error)) break; // the worker does not retry these either
+    }
+  }
+  const stored = await withTenant(database.db, ctx.organizationId, (tx) => getDocument(tx, ctx, document.id));
+  const chunks = await withTenant(database.db, ctx.organizationId, (tx) => listDocumentChunks(tx, ctx, document.id));
+  return { document: stored!, chunks, errors };
+}
+const hebrewSentence = "לקוחות בתוכנית Growth זכאים להחזר מלא בתוך 30 יום ממועד הרכישה, בכפוף לאישור של ראש הצוות. ";
+const withConfig = (overrides: Record<string, string>): Services => ({ ...services, config: parseConfig({ ...baseEnv, ...overrides }) });
+const used = (ctx: TenantContext) => withTenant(database.db, ctx.organizationId, (tx) => budgetUsed(tx, ctx.organizationId));
+
+describe("embedding length limits", () => {
+  it("sizes Hebrew and mixed text to the model's token estimate before embedding, without losing text or location", async () => {
+    const t = await tenant("tokens-estimate");
+    const seen: string[] = [];
+    const base = new DeterministicEmbeddings(1024);
+    // A model with a 100-token limit (one sentence fits, two do not), estimated the way the Cohere adapter estimates.
+    const limited = Object.assign(Object.create(base), {
+      descriptor: base.descriptor, maxCharsPerText: base.maxCharsPerText, maxTokensPerText: 100, estimateTokens: estimateCohereTokens,
+      embedDocuments: async (texts: string[]) => (seen.push(...texts), base.embedDocuments(texts)),
+    }) as EmbeddingsProvider;
+    const text = `# נוהל החזרים\n\n${hebrewSentence.repeat(12)}\n\n# Refunds\n\n${"Annual plans are refunded in full within 30 days of purchase. ".repeat(12)}`;
+    const { document, chunks } = await ingestInline({ ...services, embeddings: limited }, t, "limits.md", text);
+    expect(document.status).toBe("ready");
+    expect(chunks.length).toBeGreaterThan(6);
+    for (const chunk of chunks) expect(estimateCohereTokens(chunk.text)).toBeLessThanOrEqual(100);
+    // What was stored is exactly what was embedded, in order.
+    expect(chunks.map((c) => c.text)).toEqual(seen);
+    expect(chunks.map((c) => c.chunkIndex)).toEqual(chunks.map((_, i) => i));
+    // No sentence was dropped or cut, and each piece kept its section.
+    // (Neighbouring chunks may repeat a sentence: that is the chunker's overlap.)
+    const all = chunks.map((c) => c.text).join(" ");
+    expect(all.split(hebrewSentence.trim()).length - 1).toBeGreaterThanOrEqual(12);
+    expect(all.split("Annual plans are refunded in full within 30 days of purchase.").length - 1).toBeGreaterThanOrEqual(12);
+    for (const chunk of chunks) {
+      const rest = chunk.text.replaceAll(hebrewSentence.trim(), "").replaceAll("Annual plans are refunded in full within 30 days of purchase.", "");
+      expect(rest.replace(/^(נוהל החזרים|Refunds)/, "").trim(), "only whole sentences, and at most the section heading").toBe("");
+    }
+    expect(chunks.filter((c) => c.text.includes("Annual plans")).every((c) => c.sectionPath?.join() === "Refunds")).toBe(true);
+    expect(chunks.filter((c) => c.text.includes("לקוחות")).every((c) => c.sectionPath?.join() === "נוהל החזרים")).toBe(true);
+  });
+
+  it("splits and retries when the provider itself rejects a passage, and gives up after a bounded number of splits", async () => {
+    const t = await tenant("tokens-reject");
+    const base = new DeterministicEmbeddings(1024);
+    let calls = 0;
+    const rejecting = (limit: number) =>
+      Object.assign(Object.create(base), {
+        descriptor: base.descriptor, maxCharsPerText: base.maxCharsPerText,
+        embedDocuments: async (texts: string[]) => {
+          calls += 1;
+          if (texts.some((text) => text.length > limit)) throw new EmbeddingInputTooLongError("too long", "provider");
+          return base.embedDocuments(texts);
+        },
+      }) as EmbeddingsProvider;
+    const text = hebrewSentence.repeat(20);
+
+    const recovered = await ingestInline({ ...services, embeddings: rejecting(300) }, t, "reject.txt", text);
+    expect(recovered.document.status).toBe("ready");
+    expect(Math.max(...recovered.chunks.map((c) => c.text.length))).toBeLessThanOrEqual(300);
+    expect(recovered.chunks.map((c) => c.text).join(" ").split(hebrewSentence.trim()).length - 1).toBeGreaterThanOrEqual(20);
+    for (const chunk of recovered.chunks) expect(chunk.text.replaceAll(hebrewSentence.trim(), "").trim(), "only whole sentences").toBe("");
+
+    calls = 0;
+    const hopeless = await ingestInline({ ...services, embeddings: rejecting(5) }, t, "hopeless.txt", `${text} once more`);
+    expect(hopeless.document).toMatchObject({ status: "failed", failureCode: "embedding_failed" });
+    expect(hopeless.chunks).toHaveLength(0);
+    expect(calls).toBeLessThan(200); // bounded: 3 extra levels of splitting per passage, then stop
+  });
+});
+
+describe("daily AI budget", () => {
+  const limits = { inputTokens: 1000, outputTokens: 100 };
+
+  it("never lets concurrent reservations pass the limit", async () => {
+    const t = await tenant("budget-atomic");
+    const results = await Promise.all(
+      Array.from({ length: 25 }, () => withTenant(database.db, t.organizationId, (tx) => reserveBudget(tx, t.organizationId, { inputTokens: 100, outputTokens: 0 }, limits))),
+    );
+    expect(results.filter(Boolean)).toHaveLength(10);
+    expect(await used(t)).toEqual({ inputTokens: 1000, outputTokens: 0 });
+    // A single request larger than the whole budget is refused even on an empty day.
+    const u = await tenant("budget-oversize");
+    expect(await withTenant(database.db, u.organizationId, (tx) => reserveBudget(tx, u.organizationId, { inputTokens: 1001, outputTokens: 0 }, limits))).toBeNull();
+  });
+
+  it("resets on the next UTC day, and settles a reservation on the day it was made", async () => {
+    const t = await tenant("budget-days");
+    const lateEvening = new Date("2027-03-01T23:59:58Z");
+    const afterMidnight = new Date("2027-03-02T00:00:01Z");
+    const reserve = (at: Date, inputTokens: number) => withTenant(database.db, t.organizationId, (tx) => reserveBudget(tx, t.organizationId, { inputTokens, outputTokens: 0 }, limits, at));
+    const first = await reserve(lateEvening, 900);
+    expect(first?.day).toBe("2027-03-01");
+    expect(await reserve(lateEvening, 200)).toBeNull();
+    expect((await reserve(afterMidnight, 200))?.day).toBe("2027-03-02");
+    // The call that started before midnight finishes after it and used less than reserved.
+    await withTenant(database.db, t.organizationId, (tx) => settleBudget(tx, first!, { inputTokens: 300, outputTokens: 0 }));
+    const on = (at: Date) => withTenant(database.db, t.organizationId, (tx) => budgetUsed(tx, t.organizationId, at));
+    expect(await on(lateEvening)).toEqual({ inputTokens: 300, outputTokens: 0 });
+    expect(await on(afterMidnight)).toEqual({ inputTokens: 200, outputTokens: 0 });
+  });
+
+  it("cannot be read or changed by another organization", async () => {
+    const t = await tenant("budget-rls-a");
+    const other = await tenant("budget-rls-b");
+    await withTenant(database.db, t.organizationId, (tx) => reserveBudget(tx, t.organizationId, { inputTokens: 500, outputTokens: 0 }, limits));
+    expect(await withTenant(database.db, other.organizationId, (tx) => budgetUsed(tx, t.organizationId))).toEqual({ inputTokens: 0, outputTokens: 0 });
+    await expect(withTenant(database.db, other.organizationId, (tx) => reserveBudget(tx, t.organizationId, { inputTokens: 1, outputTokens: 0 }, limits))).rejects.toThrow();
+  });
+
+  it("fails ingestion clearly when the budget does not cover the document, without calling the provider", async () => {
+    const t = await tenant("budget-ingest");
+    const base = new DeterministicEmbeddings(1024);
+    let calls = 0;
+    const counting = Object.assign(Object.create(base), {
+      descriptor: base.descriptor, maxCharsPerText: base.maxCharsPerText,
+      embedDocuments: async (texts: string[]) => ((calls += 1), base.embedDocuments(texts)),
+    }) as EmbeddingsProvider;
+    const { document, chunks, errors } = await ingestInline({ ...withConfig({ BUDGET_DAILY_INPUT_TOKENS: "50" }), embeddings: counting }, t, "big.txt", "Refund approvals are checked against policy. ".repeat(60), 3);
+    expect(errors).toEqual(["budget_exceeded"]); // permanent: not retried
+    expect(document).toMatchObject({ status: "failed", failureCode: "budget_exceeded" });
+    expect(chunks).toHaveLength(0);
+    expect(calls).toBe(0);
+    expect(await used(t)).toEqual({ inputTokens: 0, outputTokens: 0 });
+  });
+
+  it("lets concurrent workers index only what the budget covers", async () => {
+    const t = await tenant("budget-concurrent");
+    const body = (letter: string) => `Document ${letter}. ${"Tickets are answered within one business day. ".repeat(40)}`;
+    const probe = await ingestInline(services, await tenant("budget-probe"), "probe.txt", body("P"));
+    const perDocument = probe.chunks.reduce((sum, chunk) => sum + chunk.tokenEstimate, 0);
+    const limited = withConfig({ BUDGET_DAILY_INPUT_TOKENS: String(perDocument * 2 + 5) });
+    const results = await Promise.all(["A", "B", "C", "D"].map((letter) => ingestInline(limited, t, `doc-${letter}.txt`, body(letter))));
+    expect(results.map((r) => r.document.status).sort()).toEqual(["failed", "failed", "ready", "ready"]);
+    expect(results.filter((r) => r.document.status === "failed").every((r) => r.document.failureCode === "budget_exceeded")).toBe(true);
+    expect((await used(t)).inputTokens).toBeLessThanOrEqual(perDocument * 2 + 5);
+  });
+
+  it("makes every retry pay again, so a failing provider cannot spend without limit", async () => {
+    const t = await tenant("budget-retry");
+    const base = new DeterministicEmbeddings(1024);
+    let calls = 0;
+    const failing = Object.assign(Object.create(base), {
+      descriptor: base.descriptor, maxCharsPerText: base.maxCharsPerText,
+      embedDocuments: async () => {
+        calls += 1;
+        throw new Error("upstream unavailable");
+      },
+    }) as EmbeddingsProvider;
+    const text = "Escalations go to the duty manager. ".repeat(50);
+    const probe = await ingestInline(services, await tenant("budget-probe-2"), "probe.txt", text);
+    const perAttempt = probe.chunks.reduce((sum, chunk) => sum + chunk.tokenEstimate, 0);
+    const limited = { ...withConfig({ BUDGET_DAILY_INPUT_TOKENS: String(Math.floor(perAttempt * 2.5)) }), embeddings: failing };
+    const { document, errors } = await ingestInline(limited, t, "flaky.txt", text, 5);
+    // Two attempts reach the provider and keep their reservations; the third is stopped by the budget.
+    expect(errors).toEqual(["embedding_failed", "embedding_failed", "budget_exceeded"]);
+    expect(calls).toBe(2);
+    expect(document).toMatchObject({ status: "failed", failureCode: "budget_exceeded" });
+  });
+
+  it("reserves for a question, charges what was used, and refuses the next one when the budget is spent", async () => {
+    const t = await tenant("budget-chat");
+    await ingestInline(services, t, "refunds.txt", "Annual plans are refunded in full within 30 days of purchase.");
+    const afterIngestion = (await used(t)).inputTokens;
+    const reporting: ChatModelProvider = {
+      descriptor: new DeterministicChatModel().descriptor,
+      async *streamAnswer(): AsyncIterable<ChatEvent> {
+        yield { type: "text", text: "Thirty days [S1]." };
+        yield { type: "done", inputTokens: 120, outputTokens: 9, stopReason: "end_turn" };
+      },
+    };
+    const first = await ask(t, "What is the refund window for annual plans?", { chat: reporting });
+    expect(first.done).toMatchObject({ answerStatus: "answered" });
+    const afterAnswer = await used(t);
+    expect(afterAnswer.outputTokens).toBe(9); // reconciled to actual usage, not the reserved maximum
+    expect(afterAnswer.inputTokens - afterIngestion).toBeGreaterThanOrEqual(120);
+    expect(afterAnswer.inputTokens - afterIngestion).toBeLessThan(160);
+
+    const tight = { ...withConfig({ BUDGET_DAILY_OUTPUT_TOKENS: "128", LLM_MAX_OUTPUT_TOKENS: "64" }), chat: reporting };
+    const collect = async () => {
+      const events: AnswerEvent[] = [];
+      for await (const event of answerQuestion(tight, t, { userId: t.userId }, { question: "What is the refund window for annual plans?", locale: "en", correlationId: randomUUID() })) events.push(event);
+      return events;
+    };
+    // Each question reserves 64 output tokens and settles to the 9 it used: 9 used so far, then 18 … 72.
+    for (let i = 0; i < 7; i++) expect((await collect()).at(-1)).toMatchObject({ type: "done" });
+    expect((await used(t)).outputTokens).toBe(72); // 72 + 64 no longer fits under 128
+    await expect(collect()).rejects.toMatchObject({ code: "budget_exceeded" });
   });
 });

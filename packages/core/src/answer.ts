@@ -1,4 +1,4 @@
-import { buildGroundedRequest, CitationStreamFilter, pipelineModeOf, type PromptSource } from "@hks/ai";
+import { buildGroundedRequest, CitationStreamFilter, estimateTokens, pipelineModeOf, type PromptSource } from "@hks/ai";
 import {
   addAssistantMessage,
   addUserMessage,
@@ -7,7 +7,6 @@ import {
   getConversation,
   recordUsage,
   searchChunks,
-  usageSince,
   withTenant,
   type Locale,
   type NewCitation,
@@ -16,6 +15,7 @@ import {
   type TenantContext,
 } from "@hks/database";
 import { AppError, isAppError, log } from "@hks/shared";
+import { reserveAiBudget, settleAiBudget } from "./budget.ts";
 import type { Services } from "./services.ts";
 
 export type SourceView = {
@@ -78,19 +78,39 @@ export async function* answerQuestion(
   owner: Owner,
   input: AskInput,
 ): AsyncGenerator<AnswerEvent> {
+  const { config } = services;
+  // Reserve the most this question can cost before any provider is called: the question itself
+  // (query embedding), a full context window of passages, and a full-length reply. The reservation
+  // is replaced by actual usage when the answer ends, however it ends.
+  const questionTokens = estimateTokens(input.question.slice(0, MAX_QUESTION_CHARS));
+  const contextTokens = Math.ceil((config.RAG_MAX_CONTEXT_CHUNKS * config.CHUNK_MAX_CHARS) / 3) + 600;
+  const reservation = await reserveAiBudget(
+    services, ctx.organizationId, { inputTokens: questionTokens * 2 + contextTokens, outputTokens: config.LLM_MAX_OUTPUT_TOKENS }, "another question",
+  );
+  const spend: Spend = { inputTokens: 0, outputTokens: 0 };
+  try {
+    yield* answerWithinBudget(services, ctx, owner, input, spend, { question: questionTokens, reserved: reservation });
+  } finally {
+    await settleAiBudget(services, reservation, spend);
+  }
+}
+
+/** Tokens to charge for one question; updated as the answer progresses. */
+type Spend = { inputTokens: number; outputTokens: number };
+
+async function* answerWithinBudget(
+  services: Services,
+  ctx: TenantContext,
+  owner: Owner,
+  input: AskInput,
+  spend: Spend,
+  budget: { question: number; reserved: { inputTokens: number; outputTokens: number } },
+): AsyncGenerator<AnswerEvent> {
   const { config, db, chat, embeddings } = services;
   if (!chat || !embeddings) throw new AppError("provider_not_configured", "Answering is not configured");
   const question = input.question.trim();
   if (!question) throw new AppError("validation", "Enter a question");
   if (question.length > MAX_QUESTION_CHARS) throw new AppError("validation", "The question is too long");
-
-  // Usage budget (real providers only; test doubles cost nothing and are excluded).
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const used = await withTenant(db, ctx.organizationId, (tx) => usageSince(tx, ctx.organizationId, startOfDay));
-  if (used.inputTokens >= config.BUDGET_DAILY_INPUT_TOKENS || used.outputTokens >= config.BUDGET_DAILY_OUTPUT_TOKENS) {
-    throw new AppError("budget_exceeded", "The daily usage budget for this organization has been reached");
-  }
 
   const pipelineMode = pipelineModeOf(chat, embeddings);
   const index = await ensureActiveEmbeddingIndex(db, embeddings.descriptor);
@@ -116,6 +136,7 @@ export async function* answerQuestion(
   // 2. Retrieval, scoped to this workspace.
   let candidates: RetrievedChunk[];
   try {
+    spend.inputTokens = budget.question; // the query embedding
     const queryVector = await embeddings.embedQuery(question, input.signal);
     candidates = await withTenant(db, ctx.organizationId, async (tx) => {
       await recordUsage(tx, {
@@ -213,6 +234,10 @@ export async function* answerQuestion(
     }
   };
 
+  // From here the chat model may charge for the whole request even if it fails midway: assume the
+  // full reservation until the model reports what it actually used.
+  spend.inputTokens = budget.reserved.inputTokens;
+  spend.outputTokens = budget.reserved.outputTokens;
   try {
     for await (const event of chat.streamAnswer(request, input.signal)) {
       if (input.signal?.aborted) break;
@@ -220,6 +245,10 @@ export async function* answerQuestion(
       else {
         inputTokens = event.inputTokens;
         outputTokens = event.outputTokens;
+        if (event.inputTokens !== null && event.outputTokens !== null) {
+          spend.inputTokens = budget.question + event.inputTokens;
+          spend.outputTokens = event.outputTokens;
+        }
         // A reply that was cut off, refused or filtered is not a complete answer, even though the request succeeded.
         if (event.stopReason && INCOMPLETE_STOP_REASONS.has(event.stopReason)) {
           throw new AppError("provider_error", `The model stopped early (${event.stopReason})`);
