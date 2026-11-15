@@ -22,7 +22,7 @@ export LLM_PROVIDER=deterministic EMBEDDINGS_PROVIDER=deterministic
 export RAG_MIN_SIMILARITY=0.05 RAG_EVIDENCE_MIN_SIMILARITY=0.12
 export CHUNK_TARGET_CHARS=500 CHUNK_MAX_CHARS=800 CHUNK_OVERLAP_CHARS=100
 export UPLOAD_MAX_BYTES=$((2 * 1024 * 1024))
-export LIMIT_QUESTIONS_PER_MINUTE=8 LIMIT_AUTH_ATTEMPTS_PER_MINUTE=8 LIMIT_UPLOADS_PER_MINUTE=30
+export LIMIT_QUESTIONS_PER_MINUTE="${LIMIT_QUESTIONS_PER_MINUTE:-8}" LIMIT_AUTH_ATTEMPTS_PER_MINUTE="${LIMIT_AUTH_ATTEMPTS_PER_MINUTE:-8}" LIMIT_UPLOADS_PER_MINUTE=30
 export TRUSTED_PROXY_HOPS=1 LEADS_STORE=postgres LOG_LEVEL="${LOG_LEVEL:-warn}"
 export HTTP_TEST_WORK="$WORK"
 
@@ -57,7 +57,8 @@ WORKER_PID=$!
 for _ in $(seq 1 60); do curl -sf -o /dev/null "http://localhost:$PORT/en" && break; sleep 0.5; done
 
 set +e
-pnpm exec vitest run --config vitest.http.config.mts
+# RUN replaces the default runner (used by scripts/ui-checks.sh for the browser checks).
+${RUN:-pnpm exec vitest run --config vitest.http.config.mts}
 STATUS=$?
 set -e
 if [ $STATUS -ne 0 ]; then echo "--- web log (tail)"; tail -30 "$WORK/web.log"; echo "--- worker log (tail)"; tail -15 "$WORK/worker.log"; fi

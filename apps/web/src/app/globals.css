@@ -120,6 +120,7 @@
   --warning: #8a5300;
   --warning-surface: #fbefd6;
   --danger: #a8322b;
+  --on-danger: #ffffff;
   --danger-surface: #fbe7e4;
 
   --logo-page: var(--ink-800);
@@ -180,6 +181,7 @@
   --warning: #f0c069;
   --warning-surface: #33290f;
   --danger: #f29a90;
+  --on-danger: #2a0f0c;
   --danger-surface: #3a1c19;
 
   --logo-page: #2a4640;
@@ -231,6 +233,7 @@
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
   --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
   --color-danger-surface: var(--danger-surface);
   --color-stage: var(--stage);
   --color-stage-raised: var(--stage-raised);

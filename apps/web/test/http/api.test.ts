@@ -188,7 +188,7 @@ describe("documents", () => {
     const list = await alice.client.getJson("/api/v1/documents");
     expect(list.documents).toHaveLength(1);
     const doc = list.documents[0];
-    expect(doc).toMatchObject({ id: handbookId, title: "customer-support-handbook", fileType: "pdf", status: "ready", pageCount: 12, language: "en" });
+    expect(doc).toMatchObject({ id: handbookId, title: "Customer support handbook", fileType: "pdf", status: "ready", pageCount: 12, language: "en" });
     expect(JSON.stringify(doc)).not.toMatch(/storageKey|storage_key|sha256|org\//);
     expect((await alice.client.getJson("/api/v1/documents?q=HANDBOOK")).documents).toHaveLength(1);
     expect((await alice.client.getJson("/api/v1/documents?q=nothing-like-this")).documents).toHaveLength(0);
@@ -229,6 +229,7 @@ describe("documents", () => {
     expect(traversal.status).toBe(202);
     const stored = (await traversal.json()).document;
     expect(stored.filename).toBe("passwd.txt");
+    expect(stored.title).toBe("Passwd");
     await waitForDocument(alice.client, stored.id);
     expect((await alice.client.request(`/api/v1/documents/${stored.id}`, { method: "DELETE" })).status).toBe(200);
   });
@@ -429,7 +430,7 @@ describe("deletion over HTTP", () => {
     const { events } = await alice.client.ask("Priority 1 tickets receive a first response within how many minutes during business hours?");
     expect(JSON.stringify(events)).not.toContain(handbookId);
     const thread = await alice.client.getJson(`/api/v1/conversations/${aliceConversationId}`);
-    expect(thread.messages[1].citations[0]).toMatchObject({ sourceState: "removed", excerpt: null, documentId: null, documentTitle: "customer-support-handbook" });
+    expect(thread.messages[1].citations[0]).toMatchObject({ sourceState: "removed", excerpt: null, documentId: null, documentTitle: "Customer support handbook" });
     const left = await ownerQuery("select (select count(*) from document_chunks where document_id = $1)::int as chunks, (select count(*) from chunk_embeddings where document_id = $1)::int as vectors", [handbookId]);
     expect(left[0]).toEqual({ chunks: 0, vectors: 0 });
   });

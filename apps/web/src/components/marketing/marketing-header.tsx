@@ -68,6 +68,9 @@ export function MarketingHeader() {
         <div className="flex items-center gap-1">
           <LanguageSwitcher className="hidden sm:inline-flex" />
           <ThemeSwitcher className="hidden sm:inline-flex" />
+          <Link href="/sign-in" className={cn(navLinkClass, "hidden sm:inline-flex")}>
+            {t("signIn")}
+          </Link>
           <Button asChild className="ms-2 hidden sm:inline-flex">
             <Link href="/demo">{t("cta")}</Link>
           </Button>
@@ -103,6 +106,9 @@ export function MarketingHeader() {
                 </ul>
                 <Button asChild size="lg" className="mt-6 w-full">
                   <Link href="/demo">{t("cta")}</Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="mt-3 w-full">
+                  <Link href="/sign-in">{t("signIn")}</Link>
                 </Button>
               </nav>
             </SheetContent>

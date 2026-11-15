@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "^1.8.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1169.0",
     "@hks/shared": "workspace:*",
+    "@napi-rs/canvas": "^1.1.1",
     "mammoth": "^1.13.0",
     "unpdf": "^2.2.1"
   }

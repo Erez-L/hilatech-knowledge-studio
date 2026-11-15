@@ -36,6 +36,8 @@ export type AnswerEvent =
   | { type: "text"; text: string }
   /** Emitted the first time a source is cited. The label was validated against the retrieved set. */
   | { type: "citation"; source: SourceView }
+  /** Marks the position of a citation in the text stream (every occurrence, validated). */
+  | { type: "marker"; label: string }
   | {
       type: "done";
       messageId: string;
@@ -196,9 +198,12 @@ export async function* answerQuestion(
   const forward = function* (events: ReturnType<CitationStreamFilter["push"]>): Generator<AnswerEvent> {
     for (const event of events) {
       if (event.type === "text") yield { type: "text", text: event.text };
-      else if (!announced.has(event.label)) {
-        announced.add(event.label);
-        yield { type: "citation", source: view(event.label, announced.size) };
+      else {
+        if (!announced.has(event.label)) {
+          announced.add(event.label);
+          yield { type: "citation", source: view(event.label, announced.size) };
+        }
+        yield { type: "marker", label: event.label };
       }
     }
   };

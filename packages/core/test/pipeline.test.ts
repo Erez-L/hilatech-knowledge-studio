@@ -128,7 +128,7 @@ afterAll(async () => {
 describe("upload → ingestion → ready", () => {
   it("indexes a PDF through the queue and records page numbers", async () => {
     const doc = await upload(a, "customer-support-handbook.pdf", await sample("customer-support-handbook.pdf"));
-    expect(doc).toMatchObject({ status: "ready", fileType: "pdf", pageCount: 12, language: "en", title: "customer-support-handbook" });
+    expect(doc).toMatchObject({ status: "ready", fileType: "pdf", pageCount: 12, language: "en", title: "Customer support handbook" });
     expect(doc.chunkCount).toBeGreaterThanOrEqual(12);
     expect(doc.contentSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(doc.storageKey).toMatch(/^org\/[0-9a-f-]{36}\/doc\/[0-9a-f-]{36}$/);
@@ -219,7 +219,7 @@ describe("question → retrieval → grounded answer", () => {
     expect(text).toContain("Response targets");
     expect(text).not.toMatch(/\[S\d+\]/); // markers travel as citation events, not as text
     const first = done!.sources[0]!;
-    expect(first).toMatchObject({ label: "S1", ordinal: 1, documentTitle: "customer-support-handbook", pageNumber: 7, fileType: "pdf" });
+    expect(first).toMatchObject({ label: "S1", ordinal: 1, documentTitle: "Customer support handbook", pageNumber: 7, fileType: "pdf" });
     expect(first.excerpt).toContain("Priority 1 tickets receive a first response within 30 minutes");
     // Every citation event arrived before `done` and refers to a returned source.
     const cited = events.filter((e) => e.type === "citation").map((e) => (e as { source: { label: string } }).source.label);
@@ -241,10 +241,10 @@ describe("question → retrieval → grounded answer", () => {
 
   it("cites a DOCX by section and continues an existing conversation", async () => {
     const first = await ask(a, "By the end of which day must the information security course be completed before access to client systems is granted?");
-    expect(first.done!.sources[0]).toMatchObject({ documentTitle: "employee-onboarding-guide", pageNumber: null, sectionPath: ["2. Your first week", "2.3 Required training"] });
+    expect(first.done!.sources[0]).toMatchObject({ documentTitle: "Employee onboarding guide", pageNumber: null, sectionPath: ["2. Your first week", "2.3 Required training"] });
     const second = await ask(a, "What is the refund window for annual plans?", {}, { conversationId: first.start!.conversationId });
     expect(second.start!.conversationId).toBe(first.start!.conversationId);
-    expect(second.done!.sources[0]).toMatchObject({ documentTitle: "refund-and-cancellation-policy", pageNumber: 3 });
+    expect(second.done!.sources[0]).toMatchObject({ documentTitle: "Refund and cancellation policy", pageNumber: 3 });
     const thread = await withTenant(database.db, a.organizationId, (tx) => listMessages(tx, a, first.start!.conversationId));
     expect(thread).toHaveLength(4);
   });
@@ -252,7 +252,7 @@ describe("question → retrieval → grounded answer", () => {
   it("retrieves Hebrew text for a Hebrew question (lexical test double only)", async () => {
     const { done, text } = await ask(a, "כמה ימים בשבוע רשאים עובדים לעבוד מהבית?");
     expect(done!.answerStatus).toBe("answered");
-    expect(done!.sources[0]!.documentTitle).toBe("remote-work-policy-he");
+    expect(done!.sources[0]!.documentTitle).toBe("Remote work policy he");
     expect(text).toContain("עד שלושה ימים בשבוע");
   });
 
@@ -276,7 +276,7 @@ describe("question → retrieval → grounded answer", () => {
     // Organization B has only the service catalog. A's handbook must be invisible to it.
     const { done, text } = await ask(b, "How quickly do we respond to a Priority 1 ticket and what is the escalation rule?");
     expect(text).not.toContain("30 minutes");
-    expect((done?.sources ?? []).every((s) => s.documentTitle === "customer-support-handbook" && s.pageNumber !== 7)).toBe(true);
+    expect((done?.sources ?? []).every((s) => s.documentTitle === "Customer support handbook" && s.pageNumber !== 7)).toBe(true);
     const leaked = await withTenant(database.db, b.organizationId, (tx) =>
       tx.execute(sql`select count(*)::int as n from document_chunks where text like '%duty manager%'`),
     );
@@ -367,7 +367,7 @@ describe("deletion", () => {
     expect(after.text).not.toContain("cafeteria");
 
     const thread = await withTenant(database.db, a.organizationId, (tx) => listMessages(tx, a, before.start!.conversationId));
-    expect(thread[1]!.citations[0]).toMatchObject({ sourceState: "removed", excerpt: null, chunkId: null, documentTitle: "temporary-notice" });
+    expect(thread[1]!.citations[0]).toMatchObject({ sourceState: "removed", excerpt: null, chunkId: null, documentTitle: "Temporary notice" });
     expect(await codeOf(deleteDocument(services, b, { kind: "user", userId: b.userId }, doc.id, "c"))).toBe("not_found");
   });
 });

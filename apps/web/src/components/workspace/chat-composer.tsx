@@ -2,23 +2,27 @@
 
 import { ArrowUp, Square } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 type ChatComposerProps = {
   busy: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
+  /** Answering is unavailable: the field is shown but cannot be used. */
+  disabled?: boolean;
+  /** Shown under the field, for example today's usage. */
+  footnote?: ReactNode;
 };
 
 const MAX_LENGTH = 2000;
 
-export function ChatComposer({ busy, onSend, onStop }: ChatComposerProps) {
+export function ChatComposer({ busy, onSend, onStop, disabled = false, footnote }: ChatComposerProps) {
   const t = useTranslations("workspace.composer");
   const id = useId();
   const ref = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState("");
-  const canSend = value.trim().length > 0 && !busy;
+  const canSend = value.trim().length > 0 && !busy && !disabled;
 
   // Auto-resize up to a comfortable maximum, then scroll inside the field.
   useEffect(() => {
@@ -52,6 +56,7 @@ export function ChatComposer({ busy, onSend, onStop }: ChatComposerProps) {
       <div
         className={cn(
           "flex items-end gap-2 rounded-panel border border-border-strong bg-surface p-2 ps-4 shadow-raised",
+          disabled && "opacity-60",
           "transition-[border-color,box-shadow] duration-150",
           "focus-within:border-foreground/70 focus-within:ring-4 focus-within:ring-accent/45",
         )}
@@ -65,6 +70,7 @@ export function ChatComposer({ busy, onSend, onStop }: ChatComposerProps) {
           rows={1}
           value={value}
           maxLength={MAX_LENGTH}
+          disabled={disabled}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={onKeyDown}
           placeholder={t("placeholder")}
@@ -95,7 +101,8 @@ export function ChatComposer({ busy, onSend, onStop }: ChatComposerProps) {
           </button>
         )}
       </div>
-      <p className="mt-2 hidden items-center justify-center gap-1.5 text-label text-tertiary md:flex" aria-hidden>
+      {footnote && <p className="mt-2 text-center text-label text-tertiary">{footnote}</p>}
+      <p className={cn("mt-2 hidden items-center justify-center gap-1.5 text-label text-tertiary md:flex", footnote && "md:hidden")} aria-hidden>
         <kbd className={kbdClass}>Enter</kbd>
         {t("hintSend")}
         <span className="mx-1.5 h-3 w-px bg-border-strong" />

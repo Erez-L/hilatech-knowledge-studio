@@ -37,7 +37,9 @@ function displayTitle(filename: string): { title: string; filename: string } {
   // Keep only the last path segment, drop control characters, bound the length.
   const base = filename.split(/[\\/]/).pop() ?? "";
   const clean = base.replace(/[\u0000-\u001F\u007F‪-‮⁦-⁩]/g, "").trim().slice(0, 255) || "document";
-  const title = clean.replace(/\.[A-Za-z0-9]{1,8}$/, "").trim() || clean;
+  // A readable title from the file name: "refund-and_policy.pdf" → "Refund and policy".
+  const stem = clean.replace(/\.[A-Za-z0-9]{1,8}$/, "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim() || clean;
+  const title = stem.charAt(0).toLocaleUpperCase() + stem.slice(1);
   return { title: title.slice(0, 255), filename: clean };
 }
 
