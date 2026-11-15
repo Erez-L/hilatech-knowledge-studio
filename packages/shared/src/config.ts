@@ -55,7 +55,20 @@ const schema = z.object({
   BUDGET_DAILY_INPUT_TOKENS: int(2_000_000, 1),
   BUDGET_DAILY_OUTPUT_TOKENS: int(200_000, 1),
 
+  APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   AUTH_SECRET: z.string().optional(),
+  AUTH_SIGNUP_ENABLED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  AUTH_REQUIRE_EMAIL_VERIFICATION: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  AUTH_SESSION_DAYS: int(7, 1),
+
+  // "file" appends messages to a local outbox for development and tests. It never sends anything.
+  MAIL_TRANSPORT: z.enum(["file", "smtp", "none"]).default("none"),
+  MAIL_FROM: z.string().default("HilaTech Knowledge Studio <no-reply@localhost>"),
+  MAIL_OUTBOX_FILE: z.string().default(".data/mail/outbox.jsonl"),
+  SMTP_URL: z.string().optional(),
+
+  LIMIT_AUTH_ATTEMPTS_PER_MINUTE: int(10, 1),
+  LIMIT_UPLOADS_PER_MINUTE: int(10, 1),
   LEADS_STORE: z.enum(["file", "postgres", "none"]).optional(),
 });
 
@@ -91,6 +104,11 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
   const needsBedrock = c.LLM_PROVIDER === "bedrock" || c.EMBEDDINGS_PROVIDER === "bedrock-cohere";
   if (needsBedrock && !(c.BEDROCK_REGION ?? c.AWS_REGION)) problems.push("AWS_REGION or BEDROCK_REGION is required");
   if (c.STORAGE_DRIVER === "s3" && !c.S3_BUCKET) problems.push("S3_BUCKET is required");
+  if (c.MAIL_TRANSPORT === "smtp" && !c.SMTP_URL) problems.push("SMTP_URL is required");
+  if (c.MAIL_TRANSPORT === "file" && c.APP_ENV === "production") {
+    problems.push("MAIL_TRANSPORT=file is a development outbox and cannot be used in production");
+  }
+  if (c.AUTH_SECRET !== undefined && c.AUTH_SECRET.length < 32) problems.push("AUTH_SECRET must be at least 32 characters");
   if (c.CHUNK_MAX_CHARS < c.CHUNK_TARGET_CHARS) problems.push("CHUNK_MAX_CHARS must be >= CHUNK_TARGET_CHARS");
   if (problems.length) throw new AppError("not_configured", problems.join("; "));
 

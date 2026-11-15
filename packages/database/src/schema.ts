@@ -5,6 +5,7 @@
  */
 import {
   bigint,
+  boolean,
   customType,
   integer,
   jsonb,
@@ -47,11 +48,18 @@ export const organizations = pgTable("organizations", {
   updatedAt: updatedAt(),
 });
 
+/**
+ * users, sessions, accounts and verifications are read and written by Better
+ * Auth. Property names follow its field names; do not rename them.
+ */
 export const users = pgTable("users", {
   id: id(),
   email: text("email").notNull(),
-  emailVerified: ts("email_verified"),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  emailVerifiedAt: ts("email_verified_at"),
   name: text("name"),
+  image: text("image"),
+  /** Unused since Better Auth: credentials live in `accounts`. */
   passwordHash: text("password_hash"),
   locale: text("locale").$type<Locale>().notNull().default("en"),
   disabledAt: ts("disabled_at"),
@@ -62,10 +70,40 @@ export const users = pgTable("users", {
 export const sessions = pgTable("sessions", {
   id: id(),
   userId: uuid("user_id").notNull(),
-  tokenHash: text("token_hash").notNull(),
+  token: text("token"),
+  /** Unused since Better Auth. */
+  tokenHash: text("token_hash"),
+  expiresAt: ts("expires_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+  lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
+});
+
+export const accounts = pgTable("accounts", {
+  id: id(),
+  userId: uuid("user_id").notNull(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: ts("access_token_expires_at"),
+  refreshTokenExpiresAt: ts("refresh_token_expires_at"),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const verifications = pgTable("verifications", {
+  id: id(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
   expiresAt: ts("expires_at").notNull(),
   createdAt: createdAt(),
-  lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
+  updatedAt: updatedAt(),
 });
 
 export const memberships = pgTable("memberships", {

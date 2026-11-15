@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { sql } from "drizzle-orm";
+// `sql` comes from @hks/database so every package shares one drizzle-orm instance.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DeterministicChatModel, DeterministicEmbeddings, type ChatEvent, type ChatModelProvider } from "@hks/ai";
 import {
@@ -14,6 +14,7 @@ import {
   latestIngestionJob,
   listDocumentChunks,
   listMessages,
+  sql,
   usageSince,
   withTenant,
   type Database,
@@ -40,7 +41,9 @@ import {
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const sample = (name: string) => readFile(path.join(here, "..", "..", "..", "samples", "northstar", name));
+// English edition by default; "remote-work-policy-he.docx" is the Hebrew edition of the remote work policy.
+const sample = (name: string) =>
+  readFile(path.join(here, "..", "..", "..", "samples", "northstar", ...(name === "remote-work-policy-he.docx" ? ["he", "remote-work-policy.docx"] : ["en", name])));
 const QUEUE = `hks-test-${randomUUID().slice(0, 8)}`;
 
 let database: Database;

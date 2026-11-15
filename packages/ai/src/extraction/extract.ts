@@ -31,7 +31,8 @@ export async function extractDocument(
  * PDF: one block per page, so page numbers are exact.
  * A PDF with (almost) no text layer is a scan; OCR is not implemented, so it
  * is reported as unsupported instead of being indexed as empty.
- * Reading order of right-to-left text depends on pdf.js and is not yet verified with Hebrew PDFs.
+ * Right-to-left reading order: verified for the Hebrew sample PDFs in this repository
+ * (scripts/check-samples.ts). Hebrew PDFs from other producers are not verified.
  */
 async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits): Promise<ExtractedDocument> {
   const { extractText: pdfText, getDocumentProxy } = await import("unpdf");

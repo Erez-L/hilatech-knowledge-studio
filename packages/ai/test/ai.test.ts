@@ -24,7 +24,9 @@ import {
 } from "../src/index.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const sample = (name: string) => readFile(path.join(here, "..", "..", "..", "samples", "northstar", name));
+// English edition by default; "remote-work-policy-he.docx" is the Hebrew edition of the remote work policy.
+const sample = (name: string) =>
+  readFile(path.join(here, "..", "..", "..", "samples", "northstar", ...(name === "remote-work-policy-he.docx" ? ["he", "remote-work-policy.docx"] : ["en", name])));
 const fixture = (name: string) => readFile(path.join(here, "fixtures", name));
 const codeOf = async (promise: Promise<unknown> | (() => unknown)) => {
   try {

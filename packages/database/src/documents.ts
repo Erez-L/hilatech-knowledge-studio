@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
 import type { Executor, TenantContext } from "./client.ts";
 import {
   chunkEmbeddings,
@@ -65,6 +65,15 @@ export async function listDocuments(
     )
     .orderBy(desc(documents.createdAt))
     .limit(Math.min(options.limit ?? 200, 500));
+}
+
+/** Documents added to the workspace's organization since `since` (for upload limits). */
+export async function countDocumentsSince(tx: Executor, ctx: TenantContext, since: Date): Promise<number> {
+  const [row] = await tx
+    .select({ n: sql<string>`count(*)` })
+    .from(documents)
+    .where(and(eq(documents.organizationId, ctx.organizationId), gte(documents.createdAt, since)));
+  return Number(row?.n ?? 0);
 }
 
 export async function updateDocument(

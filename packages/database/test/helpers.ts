@@ -7,7 +7,7 @@ export const OWNER_URL = process.env.DATABASE_MIGRATION_URL!;
 const TABLES = [
   "audit_events", "contact_leads", "usage_events", "citations", "messages", "conversations",
   "ingestion_jobs", "chunk_embeddings", "embedding_indexes", "document_chunks", "documents",
-  "workspaces", "memberships", "sessions", "users", "organizations", "schema_migrations",
+  "workspaces", "memberships", "sessions", "accounts", "verifications", "users", "organizations", "schema_migrations",
 ];
 
 /** Drops every table and re-applies migrations. Uses the owner role. */

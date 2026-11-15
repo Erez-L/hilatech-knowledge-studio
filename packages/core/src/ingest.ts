@@ -124,7 +124,11 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
     await tenant((tx) =>
       updateIngestionJob(tx, ctx, data.jobId, { status: "running", step: "validating", progress: 5, attempt: options.attempt, startedAt: new Date() }),
     );
-    const bytes = await storage.get(document.storageKey);
+    const bytes = await storage.get(document.storageKey).catch((error) => {
+      // A missing object must not look like a missing document: mark the document failed.
+      if (isAppError(error) && error.code === "not_found") throw new AppError("extraction_failed", "The stored file is missing");
+      throw error;
+    });
     const { fileType } = detectFileType(bytes, document.originalFilename); // re-validate what was actually stored
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     try {
@@ -193,13 +197,12 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
     if (permanent || options.finalAttempt) {
       await tenant(async (tx) => {
         await updateIngestionJob(tx, ctx, data.jobId, { status: "failed", errorCode: code, errorDetail: detail, finishedAt: new Date() });
-        if (code !== "not_found") {
-          await updateDocument(tx, ctx, data.documentId, {
-            status: code === "unsupported_scanned_pdf" || code === "unsupported_file_type" ? "unsupported" : "failed",
-            failureCode: code,
-            failureDetail: detail,
-          });
-        }
+        // If the document row is already gone this updates nothing.
+        await updateDocument(tx, ctx, data.documentId, {
+          status: code === "unsupported_scanned_pdf" || code === "unsupported_file_type" ? "unsupported" : "failed",
+          failureCode: code,
+          failureDetail: detail,
+        });
       }).catch(() => {});
     }
     throw error;

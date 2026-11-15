@@ -1,0 +1,912 @@
+[
+  {
+    "id": "he-he-001",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "תוך כמה זמן פנייה בעדיפות 1 מקבלת תגובה ראשונה?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "he",
+          "page": 7
+        }
+      ],
+      "mustContain": [
+        "30"
+      ],
+      "notes": "30 דקות בשעות הפעילות, ועדכון סטטוס בכל שעה."
+    }
+  },
+  {
+    "id": "he-he-002",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "עד איזה סכום נציג תמיכה רשאי לאשר החזר כספי בעצמו?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "he",
+          "page": 11
+        }
+      ],
+      "mustContain": [
+        "400"
+      ],
+      "notes": "עד $400; מעל זה נדרש אישור של ראש צוות."
+    }
+  },
+  {
+    "id": "he-he-003",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "מהם דמי הביטול המוקדם בתוכנית שנתית שמבוטלת אחרי יותר מ-30 יום?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "he",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "10%"
+      ],
+      "notes": "החודשים שלא נוצלו מוחזרים באופן יחסי, בניכוי 10%."
+    }
+  },
+  {
+    "id": "he-he-004",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "כמה תנועות בחודש כוללת התוכנית Bookkeeping Essentials ומה מחירה החודשי?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "product-and-service-catalog",
+          "edition": "he",
+          "page": 4
+        }
+      ],
+      "mustContain": [
+        "150",
+        "290"
+      ],
+      "notes": "150 תנועות, $290 לחודש. הנתונים מופיעים גם בטבלה בעמוד 6."
+    }
+  },
+  {
+    "id": "he-he-005",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "עד איזה יום בחודש מגישים בקשה להחזר הוצאות אינטרנט ביתי, ומה גובה ההשתתפות?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "remote-work-policy",
+          "edition": "he",
+          "section": "5. החזר הוצאות"
+        }
+      ],
+      "mustContain": [
+        "25",
+        "100"
+      ],
+      "notes": "עד ה-25 בכל חודש; 100 ש\"ח בחודש."
+    }
+  },
+  {
+    "id": "he-he-006",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "באיזה תאריך המשרד סגור בקיץ 2027?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "holiday-schedule-2027",
+          "edition": "he"
+        }
+      ],
+      "mustContain": [
+        "15"
+      ],
+      "notes": "15 באוגוסט 2027, יום אחד."
+    }
+  },
+  {
+    "id": "he-he-007",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "כמה זמן נמשכת תקופת הניסיון, ואחרי כמה ימים מתקיימת שיחת המשוב הראשונה?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "employee-onboarding-guide",
+          "edition": "he",
+          "section": "3.1 תקופת ניסיון"
+        }
+      ],
+      "mustContain": [
+        "90",
+        "45"
+      ],
+      "notes": "90 יום; שיחת משוב אחרי 45 יום ושוב בסוף התקופה."
+    }
+  },
+  {
+    "id": "he-he-008",
+    "category": "he_question_he_source",
+    "language": "he",
+    "question": "מאחר שמותר לעבוד מהבית חמישה ימים בשבוע, באילו שעות צריך להיות זמין בימי עבודה מרחוק?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "remote-work-policy",
+          "edition": "he",
+          "section": "2. ימי עבודה מהבית"
+        },
+        {
+          "document": "remote-work-policy",
+          "edition": "he",
+          "section": "3. זמינות"
+        }
+      ],
+      "mustContain": [
+        "9:00",
+        "16:00"
+      ],
+      "notes": "MISLEADING PREMISE: הנוהל מתיר עד שלושה ימים בשבוע, לא חמישה. התשובה צריכה לתקן את ההנחה ואז לענות: זמינות בין 9:00 ל-16:00."
+    }
+  },
+  {
+    "id": "en-en-001",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "How quickly must a Priority 2 ticket receive a first response?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "en",
+          "page": 7
+        }
+      ],
+      "mustContain": [
+        "4"
+      ],
+      "notes": "Within 4 business hours."
+    }
+  },
+  {
+    "id": "en-en-002",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "After how long is a Priority 1 ticket that is still open escalated, and to whom?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "en",
+          "page": 8
+        }
+      ],
+      "mustContain": [
+        "2"
+      ],
+      "notes": "After 2 hours, to the duty manager."
+    }
+  },
+  {
+    "id": "en-en-003",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "How much does each additional employee cost on Payroll Basic?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "product-and-service-catalog",
+          "edition": "en",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "12"
+      ],
+      "notes": "$12 a month per additional employee (the plan covers up to 10)."
+    }
+  },
+  {
+    "id": "en-en-004",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "Within how many business days is a refund returned to the original payment method?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "en",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "7"
+      ],
+      "notes": "Within 7 business days."
+    }
+  },
+  {
+    "id": "en-en-005",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "On which day of the month are salaries paid?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "employee-onboarding-guide",
+          "edition": "en",
+          "section": "2.4 Payroll and paperwork"
+        }
+      ],
+      "mustContain": [
+        "9"
+      ],
+      "notes": "On the 9th of each month."
+    }
+  },
+  {
+    "id": "en-en-006",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "On which dates is the office closed in spring 2027?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "holiday-schedule-2027",
+          "edition": "en"
+        }
+      ],
+      "mustContain": [
+        "21",
+        "28"
+      ],
+      "notes": "21 April to 28 April 2027."
+    }
+  },
+  {
+    "id": "en-en-007",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "How much does the company contribute towards home internet costs, and who is eligible?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "remote-work-policy",
+          "edition": "en",
+          "section": "5. Expense reimbursement"
+        }
+      ],
+      "mustContain": [
+        "100"
+      ],
+      "notes": "100 NIS a month, for employees who work from home at least two days a week."
+    }
+  },
+  {
+    "id": "en-en-008",
+    "category": "en_question_en_source",
+    "language": "en",
+    "question": "Since support agents can approve refunds of up to $1,000 on their own, who has to approve a $1,500 refund?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "en",
+          "page": 11
+        }
+      ],
+      "mustContain": [
+        "400"
+      ],
+      "notes": "MISLEADING PREMISE: agents may approve only up to $400, not $1,000. The answer must correct this and then say that a $1,500 refund needs a team lead's approval (the finance manager is needed only above $2,000)."
+    }
+  },
+  {
+    "id": "he-en-001",
+    "category": "he_question_en_source",
+    "language": "he",
+    "question": "תוך כמה ימי עסקים ראש הצוות משיב תשובה מלאה לתלונה?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "en",
+          "page": 10
+        }
+      ],
+      "mustContain": [
+        "5"
+      ],
+      "notes": "Within 5 business days (acknowledgement within 1 business day)."
+    }
+  },
+  {
+    "id": "he-en-002",
+    "category": "he_question_en_source",
+    "language": "he",
+    "question": "באילו שעות מוקד התמיכה פתוח ביום שישי?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "en",
+          "page": 2
+        }
+      ],
+      "mustContain": [
+        "08:00",
+        "13:00"
+      ],
+      "notes": "Friday, 08:00 to 13:00."
+    }
+  },
+  {
+    "id": "he-en-003",
+    "category": "he_question_en_source",
+    "language": "he",
+    "question": "כמה עולה התוכנית Bookkeeping Growth בחודש וכמה תנועות היא כוללת?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "product-and-service-catalog",
+          "edition": "en",
+          "page": 5
+        }
+      ],
+      "mustContain": [
+        "640",
+        "600"
+      ],
+      "notes": "$640 a month, up to 600 transactions. Also in the table on page 6."
+    }
+  },
+  {
+    "id": "he-en-004",
+    "category": "he_question_en_source",
+    "language": "he",
+    "question": "לכמה חודשים משולמת מראש תוכנית שנתית?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "en",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "12"
+      ],
+      "notes": "12 months."
+    }
+  },
+  {
+    "id": "he-en-005",
+    "category": "he_question_en_source",
+    "language": "he",
+    "question": "כמה ימי חופשה צובר עובד על כל חודש עבודה?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "employee-onboarding-guide",
+          "edition": "en",
+          "section": "3.2 Time off"
+        }
+      ],
+      "mustContain": [
+        "1.5"
+      ],
+      "notes": "1.5 vacation days per month worked."
+    }
+  },
+  {
+    "id": "he-en-006",
+    "category": "he_question_en_source",
+    "language": "he",
+    "question": "כמה ימים מראש צריך להגיש בקשת חופשה?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "employee-onboarding-guide",
+          "edition": "en",
+          "section": "3.2 Time off"
+        }
+      ],
+      "mustContain": [
+        "14"
+      ],
+      "notes": "At least 14 days in advance, in the HR system."
+    }
+  },
+  {
+    "id": "he-en-007",
+    "category": "he_question_en_source",
+    "language": "he",
+    "question": "מכיוון שתוכנית שנתית אפשר לבטל עם החזר מלא בתוך 60 יום מהרכישה, תוך כמה זמן הכסף מוחזר?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "en",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "30",
+        "7"
+      ],
+      "notes": "MISLEADING PREMISE: a full refund is available only within 30 days of purchase, not 60. The answer must correct this and then say refunds are returned within 7 business days."
+    }
+  },
+  {
+    "id": "en-he-001",
+    "category": "en_question_he_source",
+    "language": "en",
+    "question": "How long after the last message is a ticket closed if the customer does not reply?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "he",
+          "page": 12
+        }
+      ],
+      "mustContain": [
+        "5"
+      ],
+      "notes": "5 ימי עסקים אחרי ההודעה האחרונה."
+    }
+  },
+  {
+    "id": "en-he-002",
+    "category": "en_question_he_source",
+    "language": "en",
+    "question": "Within how many hours must a filing deadline fall for a ticket to count as Priority 1?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "he",
+          "page": 4
+        }
+      ],
+      "mustContain": [
+        "24"
+      ],
+      "notes": "מועד דיווח שחל בתוך 24 שעות ונמצא בסיכון."
+    }
+  },
+  {
+    "id": "en-he-003",
+    "category": "en_question_he_source",
+    "language": "en",
+    "question": "How many employees does Payroll Basic cover, and what does it cost per month?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "product-and-service-catalog",
+          "edition": "he",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "10",
+        "180"
+      ],
+      "notes": "עד 10 עובדים, $180 לחודש. גם בטבלה בעמוד 6."
+    }
+  },
+  {
+    "id": "en-he-004",
+    "category": "en_question_he_source",
+    "language": "en",
+    "question": "In what block size are additional Bookkeeping Essentials transactions billed, and at what price per block?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "product-and-service-catalog",
+          "edition": "he",
+          "page": 4
+        }
+      ],
+      "mustContain": [
+        "50",
+        "40"
+      ],
+      "notes": "חבילות של 50 תנועות, $40 לחבילה."
+    }
+  },
+  {
+    "id": "en-he-005",
+    "category": "en_question_he_source",
+    "language": "en",
+    "question": "How long is the introduction meeting with each team member during the first week?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "employee-onboarding-guide",
+          "edition": "he",
+          "section": "2.2 היכרות עם הצוות"
+        }
+      ],
+      "mustContain": [
+        "30"
+      ],
+      "notes": "30 דקות."
+    }
+  },
+  {
+    "id": "en-he-006",
+    "category": "en_question_he_source",
+    "language": "en",
+    "question": "Between which hours must an employee be reachable on a remote work day?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "remote-work-policy",
+          "edition": "he",
+          "section": "3. זמינות"
+        }
+      ],
+      "mustContain": [
+        "9:00",
+        "16:00"
+      ],
+      "notes": "בין 9:00 ל-16:00, בטלפון ובצ'אט הארגוני."
+    }
+  },
+  {
+    "id": "en-he-007",
+    "category": "en_question_he_source",
+    "language": "en",
+    "question": "Given that the autumn 2027 office closure is a single day, on what date does it fall?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "holiday-schedule-2027",
+          "edition": "he"
+        }
+      ],
+      "mustContain": [
+        "1",
+        "3",
+        "15",
+        "22"
+      ],
+      "notes": "MISLEADING PREMISE: the autumn closure is not a single day (that is the summer closure). It has two periods: 1 to 3 October and 15 to 22 October 2027. The answer must correct the premise."
+    }
+  },
+  {
+    "id": "ins-001",
+    "category": "insufficient_evidence",
+    "language": "en",
+    "question": "What is Northstar's VAT registration number?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "Not stated in any document. The system should say it has no source for this and must not invent a number."
+    }
+  },
+  {
+    "id": "ins-002",
+    "category": "insufficient_evidence",
+    "language": "en",
+    "question": "What is the phone number of the on-call duty manager?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "The handbook and the holiday schedule mention the on-call duty manager but give no phone number."
+    }
+  },
+  {
+    "id": "ins-003",
+    "category": "insufficient_evidence",
+    "language": "en",
+    "question": "What is the hourly rate for a one-off historical clean-up of accounts?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "The refund policy (page 1) only says one-off projects are covered by the project agreement. No rate appears anywhere."
+    }
+  },
+  {
+    "id": "ins-004",
+    "category": "insufficient_evidence",
+    "language": "en",
+    "question": "How much does the Bookkeeping Enterprise plan cost per month?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "There is no Enterprise plan. The catalog lists Payroll Basic, Bookkeeping Essentials and Bookkeeping Growth only; a good reply says the plan is not in the documents and does not guess a price."
+    }
+  },
+  {
+    "id": "ins-005",
+    "category": "insufficient_evidence",
+    "language": "he",
+    "question": "כמה ימי מחלה בתשלום מקבל עובד בשנה?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "ימי מחלה אינם מוזכרים באף מסמך (מדריך הקליטה עוסק רק בחופשה). אין להמציא מספר."
+    }
+  },
+  {
+    "id": "ins-006",
+    "category": "insufficient_evidence",
+    "language": "he",
+    "question": "מי המנכ\"ל של נורת'סטאר?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "אף מסמך אינו מציין שמות של בעלי תפקידים."
+    }
+  },
+  {
+    "id": "ins-007",
+    "category": "insufficient_evidence",
+    "language": "he",
+    "question": "האם נורת'סטאר מחזירה הוצאות נסיעה לעובדים שמגיעים למשרד?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "נוהל העבודה מרחוק עוסק רק בהשתתפות בהוצאות אינטרנט ביתי. הוצאות נסיעה אינן מוזכרות."
+    }
+  },
+  {
+    "id": "ins-008",
+    "category": "insufficient_evidence",
+    "language": "he",
+    "question": "מה שם מערכת ניהול הפניות שבה משתמש צוות התמיכה?",
+    "expected": {
+      "answerable": false,
+      "sources": [],
+      "mustContain": [],
+      "notes": "המדריך מזכיר מערכת תמיכה בלי לציין שם מוצר."
+    }
+  },
+  {
+    "id": "multi-001",
+    "category": "multi_source",
+    "language": "en",
+    "question": "A customer on an annual plan cancels three months after purchase and is due a $900 refund. Who must approve the refund, and what fee is deducted?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "en",
+          "page": 11
+        },
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "en",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "10%"
+      ],
+      "notes": "Handbook p.11: above $400 a team lead must approve (finance manager only above $2,000). Policy p.3: after 30 days a 10% early-cancellation fee is deducted."
+    }
+  },
+  {
+    "id": "multi-002",
+    "category": "multi_source",
+    "language": "en",
+    "question": "What first-response time applies to a Priority 1 ticket, and does Priority 1 support continue during the summer closure on 15 August 2027?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "en",
+          "page": 7
+        },
+        {
+          "document": "holiday-schedule-2027",
+          "edition": "en"
+        }
+      ],
+      "mustContain": [
+        "30"
+      ],
+      "notes": "Handbook p.7: 30 minutes during business hours. Holiday schedule: Priority 1 support continues through the on-call duty manager."
+    }
+  },
+  {
+    "id": "multi-003",
+    "category": "multi_source",
+    "language": "en",
+    "question": "A new employee's first day is a Tuesday. May they work from home that day, and at what time are they expected?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "remote-work-policy",
+          "edition": "en",
+          "section": "2. Work-from-home days"
+        },
+        {
+          "document": "employee-onboarding-guide",
+          "edition": "en",
+          "section": "2.1 Your first day"
+        }
+      ],
+      "mustContain": [
+        "9:00"
+      ],
+      "notes": "Remote work policy: Tuesdays are office days for all teams. Onboarding guide: People Operations meets the new employee at reception at 9:00."
+    }
+  },
+  {
+    "id": "multi-004",
+    "category": "multi_source",
+    "language": "en",
+    "question": "Because every annual-plan cancellation carries the early-cancellation fee, how much is the fee when the customer cancels because Northstar missed a filing deadline?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "en",
+          "page": 3
+        },
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "en",
+          "page": 4
+        }
+      ],
+      "mustContain": [
+        "10%"
+      ],
+      "notes": "MISLEADING PREMISE: the fee is 10% (page 3), but page 4 says Northstar waives it when the customer cancels because Northstar missed a filing deadline that was its responsibility. The answer must say the fee is waived in this case."
+    }
+  },
+  {
+    "id": "multi-005",
+    "category": "multi_source",
+    "language": "he",
+    "question": "לקוח בתוכנית Bookkeeping Growth רוצה לפנות לתמיכה בצ'אט ביום שישי. האם צ'אט זמין לו, ועד איזו שעה המוקד פתוח ביום שישי?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "product-and-service-catalog",
+          "edition": "he",
+          "page": 5
+        },
+        {
+          "document": "customer-support-handbook",
+          "edition": "he",
+          "page": 2
+        }
+      ],
+      "mustContain": [
+        "13:00"
+      ],
+      "notes": "קטלוג עמ' 5: לקוחות Growth יכולים לפנות גם בצ'אט. מדריך עמ' 2: ביום שישי המוקד פתוח 08:00 עד 13:00."
+    }
+  },
+  {
+    "id": "multi-006",
+    "category": "multi_source",
+    "language": "he",
+    "question": "עובד חדש רוצה לעבוד מהבית. עד מתי עליו להשלים את הדרכת אבטחת המידע, ובאיזה ציוד וחיבור מותר לעבוד מרחוק?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "employee-onboarding-guide",
+          "edition": "he",
+          "section": "2.3 הדרכות חובה"
+        },
+        {
+          "document": "remote-work-policy",
+          "edition": "he",
+          "section": "4. ציוד ואבטחת מידע"
+        }
+      ],
+      "mustContain": [
+        "VPN"
+      ],
+      "notes": "מדריך הקליטה: עד סוף היום השלישי. נוהל עבודה מרחוק: רק במחשב הנייד של החברה ודרך חיבור VPN."
+    }
+  },
+  {
+    "id": "multi-007",
+    "category": "multi_source",
+    "language": "he",
+    "question": "לקוח שולח תלונה ב-15 באוגוסט 2027. האם המשרד פתוח באותו יום, ותוך כמה ימי עסקים ראש הצוות משיב תשובה מלאה?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "holiday-schedule-2027",
+          "edition": "he"
+        },
+        {
+          "document": "customer-support-handbook",
+          "edition": "he",
+          "page": 10
+        }
+      ],
+      "mustContain": [
+        "5"
+      ],
+      "notes": "לוח החופשות: המשרד סגור ב-15 באוגוסט 2027. מדריך עמ' 10: תשובה מלאה בתוך 5 ימי עסקים."
+    }
+  },
+  {
+    "id": "multi-008",
+    "category": "multi_source",
+    "language": "he",
+    "question": "לקוח ביטל תוכנית שנתית אחרי חודשיים וזכאי להחזר של $2,500. מי צריך לאשר את ההחזר, ואילו דמי ביטול מנוכים?",
+    "expected": {
+      "answerable": true,
+      "sources": [
+        {
+          "document": "customer-support-handbook",
+          "edition": "he",
+          "page": 11
+        },
+        {
+          "document": "refund-and-cancellation-policy",
+          "edition": "he",
+          "page": 3
+        }
+      ],
+      "mustContain": [
+        "10%"
+      ],
+      "notes": "מדריך עמ' 11: מעל $400 נדרש ראש צוות, ומעל $2,000 גם מנהל הכספים. נוהל עמ' 3: דמי ביטול מוקדם של 10%."
+    }
+  }
+]

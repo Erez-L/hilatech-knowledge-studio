@@ -10,10 +10,24 @@ export const runtime = "nodejs";
 const MAX_BODY_BYTES = 8 * 1024;
 
 // Per client address when it can be trusted (see lib/client-ip.ts). Requests
-// with no trustworthy address share one stricter-per-head bucket, so a missing
-// or forged X-Forwarded-For header can never be used to escape the limit.
-const perClient = new MemoryRateLimiter(5, 60_000);
-const unidentified = new MemoryRateLimiter(30, 60_000);
+// with no trustworthy address share one bucket, so a missing or forged
+// X-Forwarded-For header can never be used to escape the limit.
+// With Redis configured the limit is shared by every instance; without it
+// (static preview deployments) it falls back to this process's memory.
+const memoryPerClient = new MemoryRateLimiter(5, 60_000);
+const memoryUnidentified = new MemoryRateLimiter(30, 60_000);
+
+async function checkLimit(ip: string | null): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
+  if (process.env.REDIS_URL) {
+    try {
+      const { getServices } = await import("@/server/services");
+      return await getServices().limiter.hit("contact", ip ?? "unidentified", ip ? 5 : 30, 60);
+    } catch {
+      // Redis unreachable: keep limiting locally rather than failing open.
+    }
+  }
+  return ip ? memoryPerClient.hit(ip) : memoryUnidentified.hit("unidentified");
+}
 
 function reply(body: ContactResponse, status: number, requestId: string, extraHeaders: Record<string, string> = {}) {
   return NextResponse.json(body, {
@@ -28,7 +42,7 @@ export async function POST(request: Request) {
     reply({ ok: false, error: { code, requestId }, ...(fields ? { fields } : {}) }, status, requestId);
 
   const ip = clientIp(request.headers);
-  const limit = ip ? await perClient.hit(ip) : await unidentified.hit("unidentified");
+  const limit = await checkLimit(ip);
   if (!limit.allowed) {
     return reply({ ok: false, error: { code: "rate_limited", requestId } }, 429, requestId, {
       "retry-after": String(limit.retryAfterSeconds),

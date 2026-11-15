@@ -10,3 +10,4 @@ export * from "./retrieval.ts";
 export * from "./conversations.ts";
 export * from "./usage.ts";
 export * from "./users.ts";
+export { sql } from "drizzle-orm";
