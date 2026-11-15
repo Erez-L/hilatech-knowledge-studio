@@ -95,12 +95,34 @@ for (const [name, path, theme] of [
   check("api: malformed JSON returns 400", junk.status === 400);
   const bot = await fetch(base + "/api/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "a", email: "a@b.co", message: "m", locale: "en", website: "http://spam" }) });
   check("api: filled honeypot rejected", bot.status === 422);
+  // The server under test runs with TRUSTED_PROXY_HOPS=1: only the LAST
+  // X-Forwarded-For entry counts, so a forged first entry must not help.
+  const post = (xff) => fetch(base + "/api/contact", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": xff }, body: "{}" });
   let limited = false;
-  for (let i = 0; i < 6; i++) {
-    const r = await fetch(base + "/api/contact", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.9" }, body: "{}" });
-    if (r.status === 429) limited = true;
+  let retryAfter = null;
+  for (let i = 0; i < 7; i++) {
+    const r = await post(`198.51.100.${i}, 203.0.113.9`);
+    if (r.status === 429) { limited = true; retryAfter = r.headers.get("retry-after"); }
   }
-  check("api: rate limit returns 429", limited);
+  check("api: forged X-Forwarded-For prefix cannot bypass the limit", limited);
+  check("api: 429 carries Retry-After", Number(retryAfter) > 0, String(retryAfter));
+  const other = await post("203.0.113.9, 203.0.113.77");
+  check("api: a different client address is not limited", other.status !== 429, String(other.status));
+}
+
+/* ---- contact form when no lead store is configured ---- */
+if (process.env.BASE_NO_STORE) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await page.goto(process.env.BASE_NO_STORE + "/en", { waitUntil: "networkidle" });
+  await page.getByLabel("Full name").fill("Dana Example");
+  await page.getByLabel("Work email").fill("dana@example.com");
+  await page.getByLabel("What would you like").fill("Refund policies.");
+  await page.getByRole("button", { name: "Request a demo" }).click();
+  await page.getByText("Requests can't be received right now").waitFor({ timeout: 8000 }).catch(() => {});
+  check("contact without a store: shows an error", await page.getByText("Requests can't be received right now").isVisible());
+  check("contact without a store: never shows success", (await page.getByText("Request sent").count()) === 0);
+  await context.close();
 }
 
 /* ---- workspace interactions ---- */

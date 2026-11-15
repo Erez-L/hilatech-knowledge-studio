@@ -15,7 +15,7 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 
 type Status = "idle" | "submitting" | "success";
-type FormError = "server" | "rateLimited" | null;
+type FormError = "server" | "rateLimited" | "unavailable" | null;
 
 export function ContactForm() {
   const t = useTranslations("contact");
@@ -60,7 +60,7 @@ export function ContactForm() {
         return;
       }
       if (body && !body.ok && body.error.code === "validation" && body.fields) setErrors(body.fields);
-      else setFormError(response.status === 429 ? "rateLimited" : "server");
+      else setFormError(response.status === 429 ? "rateLimited" : response.status === 503 ? "unavailable" : "server");
     } catch {
       setFormError("server");
     }

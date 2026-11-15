@@ -1,34 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { contactSchema, fieldErrors, type ContactResponse } from "@/lib/contact";
+import { clientIp } from "@/lib/client-ip";
 import { getLeadStore } from "@/lib/lead-store";
+import { MemoryRateLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 const MAX_BODY_BYTES = 8 * 1024;
-const WINDOW_MS = 60_000;
-const MAX_PER_WINDOW = 5;
 
-// Per-process limiter. Good enough for a single instance; the functional
-// milestone replaces it with the shared Redis limiter.
-const hits = new Map<string, number[]>();
+// Per client address when it can be trusted (see lib/client-ip.ts). Requests
+// with no trustworthy address share one stricter-per-head bucket, so a missing
+// or forged X-Forwarded-For header can never be used to escape the limit.
+const perClient = new MemoryRateLimiter(5, 60_000);
+const unidentified = new MemoryRateLimiter(30, 60_000);
 
-function rateLimited(key: string, now: number) {
-  const recent = (hits.get(key) ?? []).filter((time) => now - time < WINDOW_MS);
-  if (recent.length >= MAX_PER_WINDOW) {
-    hits.set(key, recent);
-    return true;
-  }
-  recent.push(now);
-  hits.set(key, recent);
-  if (hits.size > 5000) hits.clear();
-  return false;
-}
-
-function reply(body: ContactResponse, status: number, requestId: string) {
+function reply(body: ContactResponse, status: number, requestId: string, extraHeaders: Record<string, string> = {}) {
   return NextResponse.json(body, {
     status,
-    headers: { "x-request-id": requestId, "cache-control": "no-store" },
+    headers: { "x-request-id": requestId, "cache-control": "no-store", ...extraHeaders },
   });
 }
 
@@ -37,8 +27,13 @@ export async function POST(request: Request) {
   const fail = (code: Extract<ContactResponse, { ok: false }>["error"]["code"], status: number, fields?: object) =>
     reply({ ok: false, error: { code, requestId }, ...(fields ? { fields } : {}) }, status, requestId);
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (rateLimited(ip, Date.now())) return fail("rate_limited", 429);
+  const ip = clientIp(request.headers);
+  const limit = ip ? await perClient.hit(ip) : await unidentified.hit("unidentified");
+  if (!limit.allowed) {
+    return reply({ ok: false, error: { code: "rate_limited", requestId } }, 429, requestId, {
+      "retry-after": String(limit.retryAfterSeconds),
+    });
+  }
 
   const raw = await request.text();
   if (raw.length > MAX_BODY_BYTES) return fail("bad_request", 413);

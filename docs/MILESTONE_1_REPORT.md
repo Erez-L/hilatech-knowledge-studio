@@ -69,3 +69,29 @@ The landing accessibility score of 99 came from a heading-order finding in the s
 `artifacts/screenshots/` — all captured from the running application:
 
 `landing-desktop`, `landing-hero-desktop`, `landing-tablet`, `landing-mobile`, `landing-dark-desktop`, `landing-hebrew-rtl-desktop`, `landing-hebrew-rtl-mobile`, `workspace-empty-desktop`, `workspace-desktop`, `workspace-table-desktop`, `workspace-tablet`, `workspace-mobile`, `workspace-mobile-evidence`, `workspace-empty-mobile`, `workspace-dark-desktop`, `workspace-hebrew-rtl-desktop`, `workspace-hebrew-rtl-mobile`.
+
+## Closure review (2026-11-15)
+
+Changes made after the first review, on the same branch:
+
+| Item | Change |
+|---|---|
+| "Live demo" wording | Navigation says "Demo"; buttons say "Explore the demo" (Hebrew: "הדגמה", "לסיור בהדגמה"). No "live" wording remains while answers are pre-written |
+| Marketing claims | "How it works" now carries a visible in-development note. The trust section states that it describes the design, not a finished service |
+| Contact form honesty | A `503 not_configured` response now shows its own message ("Requests can't be received right now…"). A browser check runs the form against a server with no lead store and asserts that success is never shown |
+| Durable lead storage | Leads go through the `LeadStore` interface. The PostgreSQL implementation (`contact_leads`) is part of Milestone 2; until then production has no store and the form reports that |
+| Rate limiting and proxy headers | Client address is taken only from the last `TRUSTED_PROXY_HOPS` entries of `X-Forwarded-For` (default 0 = header ignored). Requests with no trustworthy address share one bucket. The limiter evicts oldest keys instead of clearing, and 429 responses carry `Retry-After`. Checks confirm a forged header prefix cannot bypass the limit |
+| Visual review | Hebrew headline no longer breaks at the maqaf on narrow screens; the two hero buttons no longer both start with "Explore" |
+
+Checks after these changes: typecheck, lint and production build pass; 59 of 59 browser checks pass (including axe on the same nine states); 17 screenshots recaptured with no console errors, failed requests or overflow. Lighthouse was not re-run.
+
+Still open at closure:
+
+1. The rate limiter is still in-process memory; the shared Redis limiter is Milestone 2 work.
+2. No production lead store exists yet (Milestone 2).
+3. Landing copy still describes capabilities that are not operational; the in-development note must stay until they are verified.
+4. Privacy and terms pages are not written.
+5. No testing on real devices, Safari, Firefox or with a screen reader.
+6. Hebrew copy has not been reviewed by a native-speaking editor.
+
+The milestone is preserved as the git tag `milestone-1` on branch `milestone-1-design-foundation`.

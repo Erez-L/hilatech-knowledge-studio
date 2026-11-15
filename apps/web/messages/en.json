@@ -24,9 +24,9 @@
     "product": "Product",
     "how": "How it works",
     "useCases": "Use cases",
-    "demo": "Live demo",
+    "demo": "Demo",
     "contact": "Contact",
-    "cta": "Try the live demo",
+    "cta": "Explore the demo",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "menuTitle": "Menu"
@@ -34,8 +34,8 @@
   "hero": {
     "title": "Your knowledge, finally within reach.",
     "body": "Turn documents into intelligent answers — backed by the sources your team can trust.",
-    "primary": "Try the live demo",
-    "secondary": "Explore the product",
+    "primary": "Explore the demo",
+    "secondary": "See the product",
     "visualLabel": "Illustration: a question, its answer, and the two document passages the answer is based on.",
     "question": "Question",
     "answer": "Answer",
@@ -71,7 +71,8 @@
       "reading": "Reading",
       "askPlaceholder": "Who approves a refund above $400?",
       "verifyLocator": "Customer Support Handbook"
-    }
+    },
+    "status": "In development: document upload and live AI answers are being built. The demo currently shows pre-written examples from fictional sample documents."
   },
   "useCases": {
     "title": "One workspace, useful to every team.",
@@ -103,7 +104,7 @@
   },
   "trust": {
     "title": "Built so you can check its work.",
-    "body": "An answer is only useful if you can rely on it. These are the rules the product is designed around.",
+    "body": "An answer is only useful if you can rely on it. These are the rules the product is being built around; they describe the design, not a finished service.",
     "items": {
       "private": {
         "title": "Private documents",
@@ -147,7 +148,8 @@
       "email": "Enter a valid email address, such as name@company.com.",
       "tooLong": "Shorten this to {max} characters or fewer.",
       "server": "Your request wasn't sent. Check your connection and try again.",
-      "rateLimited": "Too many requests from this device. Wait a minute and try again."
+      "rateLimited": "Too many requests from this device. Wait a minute and try again.",
+      "unavailable": "Requests can't be received right now, so yours wasn't sent. Please try again later."
     }
   },
   "footer": {
