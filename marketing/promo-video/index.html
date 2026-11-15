@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="he">
+<head>
+<meta charset="utf-8">
+<title>HilaTech Knowledge Studio — cinematic promo</title>
+<style>
+@font-face{font-family:Heebo;src:url(../../apps/web/src/fonts/heebo-hebrew-wght-normal.woff2) format("woff2");font-weight:100 900}
+@font-face{font-family:Jakarta;src:url(../../apps/web/src/fonts/plus-jakarta-sans-latin-wght-normal.woff2) format("woff2");font-weight:200 800}
+@font-face{font-family:Plex;src:url(../../apps/web/src/fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2");font-weight:500}
+:root{--lime:#c8f05a;--ink:#172623;--bg:#040908}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
+body{font-family:Jakarta,Heebo,sans-serif;color:#fff}
+#bg{position:absolute;inset:0;background:
+  radial-gradient(900px 620px at var(--gx,50%) 46%,rgba(46,104,66,.62),transparent 70%),
+  radial-gradient(1500px 900px at 50% 110%,rgba(120,160,40,.16),transparent 70%),
+  linear-gradient(#050c0a,#030706)}
+#stage{position:absolute;inset:0;perspective:1400px;perspective-origin:50% 50%;overflow:hidden}
+#world,.scene,.n{position:absolute;left:0;top:0;transform-style:preserve-3d}
+#world{left:960px;top:540px}
+.n{will-change:transform}
+/* glass panels */
+.panel{width:1000px;height:625px;border-radius:16px;background-size:cover;background-position:top center;
+  border:1px solid rgba(255,255,255,.34);
+  box-shadow:0 0 0 1px rgba(200,240,90,.10),0 40px 120px rgba(0,0,0,.6),0 0 90px rgba(140,200,90,.16);overflow:hidden}
+.panel::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(115deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.05) 22%,transparent 45%,transparent 80%,rgba(200,240,90,.10) 100%)}
+.phone{width:300px;height:649px;border-radius:38px;border:7px solid #0d1614;outline:1px solid rgba(255,255,255,.3)}
+.paper{position:absolute;inset:0;background:#f4f6ef;border-radius:inherit}
+.paper i{position:absolute;left:9%;height:2.6%;border-radius:9px;background:#c9cfc4}
+.paper i.hl{background:var(--lime)}
+.inner{position:absolute;left:0;top:0;width:1440px;height:900px;transform-origin:0 0}
+/* drawn things */
+.cover{position:absolute;width:250px;height:330px;border-radius:6px 14px 14px 6px;background:linear-gradient(135deg,#24423a,#12241f);
+  border:1px solid rgba(200,240,90,.35);transform-origin:0 50%;backface-visibility:visible}
+.cover b{position:absolute;left:28px;right:28px;height:12px;border-radius:6px;background:rgba(255,255,255,.35)}
+.cover b.l{background:var(--lime);height:26px}
+.leaf{position:absolute;width:226px;height:300px;top:15px;background:#eef2e8;border-radius:3px 10px 10px 3px;transform-origin:0 50%}
+.leaf i{position:absolute;left:22px;right:22px;height:7px;border-radius:4px;background:#c3cabd}
+.bubble{position:relative;padding:20px 28px;border-radius:26px;background:rgba(18,36,31,.92);border:1.5px solid rgba(200,240,90,.7);
+  font-size:30px;font-weight:600;white-space:nowrap;box-shadow:0 0 40px rgba(200,240,90,.25)}
+.bubble.he{font-family:Heebo;direction:rtl}
+.bubble::after{content:"";position:absolute;bottom:-13px;width:24px;height:24px;background:rgba(18,36,31,.92);
+  border-right:1.5px solid rgba(200,240,90,.7);border-bottom:1.5px solid rgba(200,240,90,.7);transform:rotate(45deg)}
+.bubble.he::after{right:44px}.bubble.en::after{left:44px}
+.orb{width:26px;height:26px;border-radius:50%;background:#f4ffd0;box-shadow:0 0 18px 8px rgba(200,240,90,.9),0 0 70px 26px rgba(200,240,90,.45)}
+.pill{position:absolute;font-family:Heebo;font-weight:700;font-size:21px;color:#12241f;background:var(--lime);padding:4px 14px;border-radius:999px;
+  white-space:nowrap;box-shadow:0 0 22px rgba(200,240,90,.8)}
+.pill small{font-family:Jakarta;font-weight:600;font-size:15px;opacity:.75;margin-inline-start:8px}
+.ring{width:1500px;height:1500px;border-radius:50%;border:2px solid rgba(200,240,90,.55);box-shadow:0 0 30px rgba(200,240,90,.35),inset 0 0 30px rgba(200,240,90,.2)}
+/* overlay */
+#fx,#ov{position:absolute;inset:0;pointer-events:none}
+#particles{position:absolute;inset:0}
+.flare{position:absolute;left:0;top:0;width:1920px;height:1080px;mix-blend-mode:screen;opacity:0}
+#streak{background:radial-gradient(ellipse 1300px 10px at 50% 50%,rgba(225,255,160,.95),transparent 70%),
+  radial-gradient(ellipse 520px 260px at 50% 50%,rgba(200,240,90,.42),transparent 70%)}
+#burst{background:radial-gradient(circle 620px at 50% 44%,rgba(235,255,190,.9),rgba(200,240,90,.25) 40%,transparent 70%)}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 52%,rgba(0,0,0,.62) 100%)}
+#floor{position:absolute;left:0;right:0;bottom:0;height:420px;background:linear-gradient(transparent,rgba(2,6,5,.82) 62%,rgba(2,6,5,.94))}
+.bar{position:absolute;left:0;width:100%;height:78px;background:#000}
+#cap{position:absolute;left:0;right:0;top:818px;text-align:center}
+.cap{position:absolute;left:0;right:0;top:0;opacity:0}
+.cap .he{font-family:Heebo;direction:rtl;font-weight:700;font-size:58px;line-height:1.25;text-shadow:0 4px 30px rgba(0,0,0,.8)}
+.cap .en{font-family:Jakarta;font-weight:500;font-size:25px;margin-top:10px;color:rgba(255,255,255,.72);letter-spacing:.01em}
+.k{position:relative;display:inline-block;padding:0 12px;margin:0 2px}
+.k::before{content:"";position:absolute;inset:6px 0 2px 0;background:var(--lime);border-radius:6px;transform:scaleX(var(--p,0));transform-origin:100% 50%;
+  box-shadow:0 0 34px rgba(200,240,90,.55)}
+.k span{position:relative;color:color-mix(in srgb,#fff calc((1 - var(--p,0))*100%),#12241f)}
+#note{position:absolute;right:42px;top:98px;font-family:Heebo;direction:rtl;font-size:20px;color:rgba(255,255,255,.62);
+  padding:6px 14px;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:rgba(0,0,0,.28)}
+#note span{font-family:Jakarta}
+#end{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0}
+#end h1{font-family:Jakarta;font-weight:800;font-size:112px;letter-spacing:-.035em;direction:ltr}
+#end h1 em{font-style:normal;color:var(--lime)}
+#end .tag{font-family:Heebo;direction:rtl;font-weight:500;font-size:46px;margin-top:22px}
+#end .tagen{font-size:25px;color:rgba(255,255,255,.66);margin-top:10px}
+#end .url{margin-top:44px;font-family:Jakarta;font-weight:700;font-size:34px;color:#12241f;background:var(--lime);padding:10px 34px;border-radius:999px;
+  box-shadow:0 0 60px rgba(200,240,90,.5)}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="fx"><canvas id="particles" width="1920" height="1080"></canvas></div>
+<div id="stage"><div id="world"></div></div>
+<div id="ov">
+  <div id="streak" class="flare"></div><div id="burst" class="flare"></div>
+  <div id="end">
+    <svg id="mark" width="150" height="150" viewBox="0 0 28 28"><rect x="4.5" y="2.5" width="19" height="23" rx="2.5" fill="#2f4a44" stroke="rgba(255,255,255,.35)" stroke-width=".25"/><rect x="8" y="8" width="12" height="1.75" rx=".875" fill="#fff" opacity=".55"/><rect id="markhl" x="6.5" y="12" width="15" height="4" rx="1" fill="#c8f05a"/><rect x="8" y="18.25" width="8" height="1.75" rx=".875" fill="#fff" opacity=".55"/></svg>
+    <h1>HilaTech <em>Knowledge Studio</em></h1>
+    <div class="tag">הידע שלכם, <span class="k" id="endk"><span>תמיד בהישג יד</span></span></div>
+    <div class="tagen">Your knowledge, always within reach.</div>
+    <div class="url">hilatechdev.com</div>
+  </div>
+  <div id="vig"></div><div id="floor"></div>
+  <div id="cap"></div>
+  <div id="note">תוכן לדוגמה · חברת <span>Northstar</span> בדיונית</div>
+  <div class="bar" style="top:0"></div><div class="bar" style="bottom:0"></div>
+</div>
+<script src="timeline.js"></script>
+<script src="film.js"></script>
+</body>
+</html>
