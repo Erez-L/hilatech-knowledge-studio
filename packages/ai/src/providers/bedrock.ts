@@ -150,7 +150,7 @@ export class BedrockCohereEmbeddings implements EmbeddingsProvider {
       // With truncate "NONE" an over-long text comes back as a ValidationException. Other validation
       // problems look the same, so the caller's split-and-retry is bounded.
       if (errorName(error) === "ValidationException") {
-        throw new EmbeddingInputTooLongError(`Bedrock rejected the request as invalid, possibly a text over ${COHERE_MAX_TOKENS} tokens`, "provider");
+        throw new EmbeddingInputTooLongError(`Bedrock rejected the request as invalid, possibly a text over ${COHERE_MAX_TOKENS} tokens`, "provider", { cause: error });
       }
       throw new AppError("embedding_failed", `Bedrock embeddings request failed (${errorName(error)})`, { cause: error });
     }
