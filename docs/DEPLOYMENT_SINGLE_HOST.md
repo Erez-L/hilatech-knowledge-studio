@@ -1,0 +1,49 @@
+# Deployment on a single Docker host, next to another product
+
+How the public demo at https://knowledge.hilatechdev.com is deployed. First done on 2026-11-17 with image `v0.1.0`. The reference design with managed services is in `docs/DEPLOYMENT.md`; this document describes what actually runs.
+
+## What runs where
+
+| Piece | Where |
+|---|---|
+| Host | EC2 `hilatech-demo` (`i-0dbaef6ebf899621c`, t3.medium, us-east-1, Elastic IP `98.91.94.108`), shared with HilaTech AI Assistant |
+| This stack | `/opt/knowledge-studio`: compose project `knowledge-studio` with `web`, `worker`, `ks-postgres`, `ks-redis` and a one-shot `migrate` |
+| The other product | `/opt/hilatech`, compose project `hilatech-ai-assistant`. It owns ports 80 and 443 through its Caddy container |
+| Routing | A site block for `knowledge.hilatechdev.com` in `/opt/hilatech/Caddyfile` proxies to `knowledge-studio-web:3000`. The web container joins the network `hilatech-ai-assistant_default` under that alias |
+| TLS | Caddy obtains the certificate from Let's Encrypt |
+| DNS | Cloudflare, zone `hilatechdev.com`: A record `knowledge` to `98.91.94.108`, DNS only (not proxied), like `demosaas` |
+| Image | `ghcr.io/erez-l/hilatech-knowledge-studio/app:<tag>`, built by `.github/workflows/build-image.yml` when a release with tag `v*` is published |
+| AWS identity | The instance role `hilatech-demo-server`. Its existing policy allows Bedrock; the inline policy `knowledge-studio-s3` allows the bucket `hilatech-knowledge-studio-docs-590184083649` |
+| Secrets | `/opt/knowledge-studio/.env`, mode 600, generated on the host. Database passwords and `AUTH_SECRET` exist nowhere else |
+
+## Two things that are easy to get wrong
+
+1. **Service names.** The web container is on two networks. On the proxy's network the other product also has services called `postgres` and `redis`. With those names in this stack, the web container connected to the other product's Redis and tried its Postgres. The services are therefore named `ks-postgres` and `ks-redis`. Never give a service here a name that exists in the other stack.
+2. **The Caddyfile is a single-file bind mount.** Append to it in place (`cat >> Caddyfile`). An editor or `sed -i` replaces the file and the running container keeps seeing the old one. Validate before reloading: `docker exec hilatech-ai-assistant-proxy-1 caddy validate --config /etc/caddy/Caddyfile`, then `caddy reload`. The copy from before the change is `/opt/hilatech/Caddyfile.before-knowledge-studio`.
+
+If a deployment of the other product replaces its Caddyfile from its own repository, the `knowledge.hilatechdev.com` block is lost. It has to be added to that repository as well. Not done yet.
+
+## First deployment, in order
+
+1. Publish a GitHub release with tag `vX.Y.Z` on the branch to deploy. Wait for the "Build image" workflow.
+2. Cloudflare: A record for the subdomain to the Elastic IP, DNS only. Do this before step 5, or Caddy fails the certificate challenge.
+3. IAM: inline policy on the instance role for the bucket (once).
+4. On the host, in `/opt/knowledge-studio`: the four files from `infrastructure/deploy/`, a `.env` made from `env.example` with generated values, then `docker compose -f docker-compose.prod.yml --env-file .env up -d`. Wait for `web` to be healthy.
+5. Append the site block from `Caddyfile.snippet` to the proxy's Caddyfile, validate, reload.
+6. Seed the demo once: `docker compose -f docker-compose.prod.yml --env-file .env run --rm --no-deps -T worker pnpm -s demo:seed`. It embeds the twelve sample documents with the real embeddings model (a paid call of a few cents).
+7. Check `https://<subdomain>/api/v1/demo` returns `available: true` with `pipeline.mode: "live"`, and that the other product still answers.
+
+Commands on the host were run as root through AWS Systems Manager (`aws ssm send-command`, document `AWS-RunShellScript`) from CloudShell; the host needs no inbound SSH for this.
+
+## Releasing a new version
+
+1. Publish a release `vX.Y.Z`; wait for the image.
+2. On the host: `cd /opt/knowledge-studio && ./deploy.sh vX.Y.Z`. It pulls, restarts, waits for `web` to be healthy and prints the previous tag. It keeps the old image.
+3. Check the live site.
+4. Only after the owner has approved the new version: `./prune-old-images.sh`. It removes every older image of this app, and with them the quick way back.
+
+To go back before pruning: `./deploy.sh <previous tag>`.
+
+## State on 2026-11-17
+
+Image `v0.1.0`. Chat model `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku 5.5 was not available to the account). `APP_ENV=demo`, sign-up off, mail off, thresholds 0.4 / 0.5. The compose file on the host was patched by hand for the service names; it matches this repository from the commit that adds this document.
