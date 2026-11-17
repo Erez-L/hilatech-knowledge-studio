@@ -1,5 +1,5 @@
 import "server-only";
-import { createChatModel, createEmbeddingsProvider } from "@hks/ai";
+import { createChatModel, createEmbeddingsProvider, createPageReader } from "@hks/ai";
 import {
   BullJobQueue,
   createMailer,
@@ -45,6 +45,7 @@ export function getServices(): ServerServices {
     queue: new BullJobQueue(config.REDIS_URL),
     embeddings: createEmbeddingsProvider(config),
     chat: createChatModel(config),
+    pageReader: createPageReader(config),
     limiter: new RedisRateLimiter(redis),
     mailer: createMailer(config),
     pendingRegistrations: new PendingRegistrations(redis),

@@ -1,5 +1,5 @@
 /** Ingestion worker process: consumes the BullMQ queue and indexes uploaded documents. */
-import { createChatModel, createEmbeddingsProvider } from "@hks/ai";
+import { createChatModel, createEmbeddingsProvider, createPageReader } from "@hks/ai";
 import { createIngestionWorker, createStorage } from "@hks/core";
 import { createDatabase } from "@hks/database";
 import { getConfig, log } from "@hks/shared";
@@ -17,10 +17,10 @@ if (!embeddings) {
 
 const database = createDatabase(config.DATABASE_URL, { max: 5 });
 const worker = createIngestionWorker(
-  { config, db: database.db, storage: createStorage(config), embeddings, chat: createChatModel(config) },
+  { config, db: database.db, storage: createStorage(config), embeddings, chat: createChatModel(config), pageReader: createPageReader(config) },
   config.REDIS_URL,
 );
-log("info", "worker.started", { embeddings: embeddings.descriptor.provider, kind: embeddings.descriptor.kind });
+log("info", "worker.started", { embeddings: embeddings.descriptor.provider, kind: embeddings.descriptor.kind, scannedPages: config.OCR_PROVIDER });
 
 const shutdown = async () => {
   await worker.close();

@@ -26,6 +26,7 @@ export const GET = route(async ({ request, requestId }) => {
       },
       limits: {
         uploadMaxBytes: config.UPLOAD_MAX_BYTES,
+        scannedPdfPages: config.OCR_PROVIDER === "none" ? 0 : config.OCR_MAX_PAGES,
         questionsPerDay: config.LIMIT_QUESTIONS_PER_DAY,
         questionMaxChars: 2000,
       },

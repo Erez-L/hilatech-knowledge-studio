@@ -194,7 +194,7 @@ export function Library() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[1.0625rem] font-bold">{dragging ? t("dropActive") : t("dropTitle")}</p>
-                <p className="mt-1 text-small text-secondary">{t("dropBody", { max: maxMb })}</p>
+                <p className="mt-1 text-small text-secondary">{me?.limits.scannedPdfPages ? t("dropBodyScanned", { max: maxMb, pages: me.limits.scannedPdfPages }) : t("dropBody", { max: maxMb })}</p>
               </div>
               <input
                 ref={fileInput}

@@ -49,6 +49,25 @@ export interface ChatModelProvider {
   streamAnswer(request: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatEvent>;
 }
 
+export type PageReading = {
+  /** The text as printed on the page; empty when the page has none. */
+  text: string;
+  /** True when the model stopped at its output limit, so the end of the page is missing. */
+  truncated: boolean;
+  inputTokens: number | null;
+  outputTokens: number | null;
+};
+
+/** Reads the text printed on a scanned page (OCR through a vision model). */
+export interface PageTextReader {
+  readonly descriptor: ProviderDescriptor;
+  /** Upper bound of output tokens for one page; used to reserve budget before the call. */
+  readonly maxOutputTokensPerPage: number;
+  /** Rough input tokens for one page image plus instructions; used to reserve budget. */
+  readonly estimatedInputTokensPerPage: number;
+  readPage(png: Uint8Array, signal?: AbortSignal): Promise<PageReading>;
+}
+
 /**
  * The provider refused one or more texts as too long. Nothing was truncated and
  * nothing was embedded for this call; the caller may split the text and retry.

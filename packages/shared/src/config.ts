@@ -49,6 +49,14 @@ const schema = z.object({
 
   UPLOAD_MAX_BYTES: int(20 * 1024 * 1024, 1024),
   UPLOAD_MAX_PAGES: int(300, 1),
+
+  // Scanned PDF pages (no text layer) are read by a vision model when this is set. "none" keeps
+  // them unsupported. Every page read is a paid model call, so the page count is capped.
+  OCR_PROVIDER: z.enum(["bedrock", "deterministic", "none"]).default("none"),
+  // Falls back to LLM_MODEL_ID. The model must accept image input.
+  OCR_MODEL_ID: z.string().optional(),
+  OCR_MAX_PAGES: int(20, 1),
+  OCR_MAX_OUTPUT_TOKENS: int(16_000, 256),
   LIMIT_QUESTIONS_PER_MINUTE: int(10, 1),
   LIMIT_QUESTIONS_PER_DAY: int(200, 1),
   LIMIT_UPLOADS_PER_DAY: int(50, 1),
@@ -96,7 +104,7 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
   const c = result.data;
   const problems: string[] = [];
 
-  const usesDouble = c.LLM_PROVIDER === "deterministic" || c.EMBEDDINGS_PROVIDER === "deterministic";
+  const usesDouble = c.LLM_PROVIDER === "deterministic" || c.EMBEDDINGS_PROVIDER === "deterministic" || c.OCR_PROVIDER === "deterministic";
   if (usesDouble && c.APP_ENV === "production") {
     problems.push("deterministic providers are test doubles and cannot run in production");
   }
@@ -110,7 +118,8 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
   if (c.EMBEDDINGS_PROVIDER === "bedrock-cohere" && !c.EMBEDDINGS_MODEL_ID) {
     problems.push("EMBEDDINGS_MODEL_ID is required");
   }
-  const needsBedrock = c.LLM_PROVIDER === "bedrock" || c.EMBEDDINGS_PROVIDER === "bedrock-cohere";
+  if (c.OCR_PROVIDER === "bedrock" && !(c.OCR_MODEL_ID ?? c.LLM_MODEL_ID)) problems.push("OCR_MODEL_ID or LLM_MODEL_ID is required");
+  const needsBedrock = c.LLM_PROVIDER === "bedrock" || c.EMBEDDINGS_PROVIDER === "bedrock-cohere" || c.OCR_PROVIDER === "bedrock";
   if (needsBedrock && !(c.BEDROCK_REGION ?? c.AWS_REGION)) problems.push("AWS_REGION or BEDROCK_REGION is required");
   if (c.STORAGE_DRIVER === "s3" && !c.S3_BUCKET) problems.push("S3_BUCKET is required");
   if (c.MAIL_TRANSPORT === "smtp" && !c.SMTP_URL) problems.push("SMTP_URL is required");
