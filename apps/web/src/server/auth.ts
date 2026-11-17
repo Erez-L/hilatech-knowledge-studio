@@ -3,40 +3,19 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { createOrganizationWithOwner, getUser, schema } from "@hks/database";
-import { AppError, log } from "@hks/shared";
+import { AppError } from "@hks/shared";
+import { sendAuthMail, type AuthMailKind } from "./auth-mail";
 import { getServices } from "./services";
 
 /** Header our own route handler sets from the trusted proxy chain; client-sent values are discarded. */
 export const CLIENT_IP_HEADER = "x-hks-client-ip";
 
-const subjects = {
-  verify_email: { en: "Confirm your email address", he: "אישור כתובת האימייל שלך" },
-  reset_password: { en: "Reset your password", he: "איפוס הסיסמה שלך" },
-} as const;
-const bodies = {
-  verify_email: {
-    en: (url: string) => `Open this link to confirm your email address for HilaTech Knowledge Studio:\n\n${url}\n\nThe link expires in one hour. If you did not create an account, ignore this message.`,
-    he: (url: string) => `פתחו את הקישור הבא כדי לאשר את כתובת האימייל שלכם ב-HilaTech Knowledge Studio:\n\n${url}\n\nהקישור תקף לשעה. אם לא יצרתם חשבון, אפשר להתעלם מההודעה.`,
-  },
-  reset_password: {
-    en: (url: string) => `Open this link to choose a new password for HilaTech Knowledge Studio:\n\n${url}\n\nThe link expires in one hour. If you did not ask for this, ignore this message; your password stays the same.`,
-    he: (url: string) => `פתחו את הקישור הבא כדי לבחור סיסמה חדשה ב-HilaTech Knowledge Studio:\n\n${url}\n\nהקישור תקף לשעה. אם לא ביקשתם זאת, אפשר להתעלם מההודעה; הסיסמה לא תשתנה.`,
-  },
-} as const;
-
 function build() {
   const { config, db, limiter, mailer } = getServices();
   if (!config.AUTH_SECRET) throw new AppError("not_configured", "AUTH_SECRET is not set");
 
-  const send = async (kind: keyof typeof subjects, user: { email: string; locale?: unknown }, url: string) => {
-    if (!mailer) {
-      // No mail transport: fail loudly rather than leave an account that can never be verified.
-      log("error", "mail.not_configured", { kind });
-      throw new AppError("not_configured", "Email delivery is not configured");
-    }
-    const locale = user.locale === "he" ? "he" : "en";
-    await mailer.send({ to: user.email, kind, subject: subjects[kind][locale], text: bodies[kind][locale](url) });
-  };
+  const send = (kind: AuthMailKind, user: { email: string; locale?: unknown }, url: string) =>
+    sendAuthMail(mailer, kind, { email: user.email, locale: user.locale === "he" ? "he" : "en" }, url);
 
   return betterAuth({
     appName: "HilaTech Knowledge Studio",
@@ -59,7 +38,9 @@ function build() {
     },
     emailAndPassword: {
       enabled: true,
-      disableSignUp: !config.AUTH_SIGNUP_ENABLED,
+      // Better Auth's own sign-up endpoint writes the user before the address is confirmed.
+      // It stays closed: accounts are created by server/registration.ts after confirmation.
+      disableSignUp: true,
       minPasswordLength: 10,
       maxPasswordLength: 128,
       requireEmailVerification: config.AUTH_REQUIRE_EMAIL_VERIFICATION,
@@ -75,8 +56,10 @@ function build() {
       sendVerificationEmail: async ({ user, url }) => send("verify_email", user, url),
     },
     session: {
-      expiresIn: config.AUTH_SESSION_DAYS * 24 * 3600,
-      updateAge: 24 * 3600,
+      // Idle timeout: a session ends AUTH_SESSION_IDLE_MINUTES after the last request. A request
+      // made more than a minute after the previous extension pushes the expiry forward again.
+      expiresIn: config.AUTH_SESSION_IDLE_MINUTES * 60,
+      updateAge: 60,
     },
     rateLimit: {
       enabled: true,

@@ -5,6 +5,7 @@ import {
   createMailer,
   createRedis,
   createStorage,
+  PendingRegistrations,
   RedisRateLimiter,
   type Mailer,
   type RateLimiter,
@@ -17,6 +18,8 @@ export type ServerServices = Services & {
   database: Database;
   limiter: RateLimiter;
   mailer: Mailer | null;
+  /** Sign-ups waiting for their email address to be confirmed. Redis only; see @hks/core registration. */
+  pendingRegistrations: PendingRegistrations;
 };
 
 // One set of connections per server process (and per dev-server reload).
@@ -44,6 +47,7 @@ export function getServices(): ServerServices {
     chat: createChatModel(config),
     limiter: new RedisRateLimiter(redis),
     mailer: createMailer(config),
+    pendingRegistrations: new PendingRegistrations(redis),
   };
   return holder.__hksServices;
 }

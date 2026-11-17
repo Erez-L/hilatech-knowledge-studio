@@ -242,7 +242,7 @@
     "haveAccount": "Already have an account?",
     "backToSite": "Back to site",
     "checkEmailTitle": "Check your email",
-    "checkEmailBody": "We sent a confirmation link to {email}. Open it to finish creating your account. The link expires in one hour.",
+    "checkEmailBody": "We sent a confirmation link to {email}. Your account is created when you open the link and confirm. The link expires in one hour.",
     "resend": "Send the link again",
     "resent": "Link sent again.",
     "forgotTitle": "Reset your password",
@@ -273,7 +273,18 @@
       "signupDisabled": "New accounts are not open at the moment.",
       "notConfigured": "Sign-in isn't available on this deployment yet.",
       "generic": "That didn't work. Check your connection and try again."
-    }
+    },
+    "signUpClosedTitle": "New accounts are not open",
+    "signUpClosedBody": "Sign-up is closed on this site at the moment. You can try the public demo without an account.",
+    "signUpClosedDemo": "Open the demo",
+    "verifyTitle": "Confirm your email address",
+    "verifyBody": "Press the button to confirm this address and create your account.",
+    "verifyConfirm": "Confirm and create my account",
+    "verifying": "Creating your account",
+    "verifiedTitle": "Your account is ready",
+    "verifiedBody": "Your email address is confirmed. Sign in with the password you chose.",
+    "verifyInvalidTitle": "This link can't be used",
+    "verifyInvalidBody": "It may have expired or been used already. Links are valid for one hour. Sign up again to get a new one."
   },
   "app": {
     "nav": {

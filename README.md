@@ -33,7 +33,7 @@ Tests need PostgreSQL 16 with pgvector and Redis. All of them use deterministic 
 
 ```bash
 bash scripts/dev-services.sh start   # host-installed services (see the script header)
-pnpm test                            # 95 tests: database, AI layer, pipeline
+pnpm test                            # 101 tests: database, AI layer, pipeline, pending sign-ups
 bash scripts/http-tests.sh           # 58 tests over HTTP: auth, authorization, tenant isolation, public demo, limits
 bash scripts/ui-checks.sh            # 75 browser checks with screenshots into artifacts/screenshots/app
 ```

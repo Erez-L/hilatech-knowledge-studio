@@ -59,7 +59,8 @@ const schema = z.object({
   AUTH_SECRET: z.string().optional(),
   AUTH_SIGNUP_ENABLED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   AUTH_REQUIRE_EMAIL_VERIFICATION: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
-  AUTH_SESSION_DAYS: int(7, 1),
+  // A session ends after this many minutes without a request. Every request extends it.
+  AUTH_SESSION_IDLE_MINUTES: int(60, 5),
 
   // "file" appends messages to a local outbox for development and tests. It never sends anything.
   MAIL_TRANSPORT: z.enum(["file", "smtp", "none"]).default("none"),
