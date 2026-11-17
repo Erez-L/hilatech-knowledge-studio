@@ -367,6 +367,7 @@
       "upload": "Upload documents",
       "dropTitle": "Drop files to upload",
       "dropBody": "PDF, Word (.docx), text or Markdown, up to {max} MB each. Scanned PDFs without a text layer aren't supported.",
+      "dropBodyScanned": "PDF, Word (.docx), text or Markdown, up to {max} MB each. Scanned PDF pages are read automatically, up to {pages} pages per file; text read from a scan can contain mistakes.",
       "browse": "Choose files",
       "dropActive": "Release to upload",
       "columns": {
@@ -420,7 +421,7 @@
         "malformed_file": "The file is damaged or password-protected and couldn't be read.",
         "duplicate_document": "This file is already in the library.",
         "extraction_failed": "No readable text was found in the file.",
-        "too_many_pages": "The PDF has too many pages.",
+        "too_many_pages": "The PDF has too many pages, or more scanned pages than can be read.",
         "embedding_failed": "Indexing failed. Retry in a moment.",
         "payload_too_large": "The file is larger than the limit.",
         "unsupported_file_type": "Only PDF, DOCX, TXT and Markdown files are supported.",
@@ -554,7 +555,7 @@
           "A signed-in organization gets a private workspace with its own library. New accounts are not open on this demonstration site; use the contact form to ask for access."
         ],
         "points": [
-          "Library. Upload PDF, Word (.docx), text or Markdown files, up to 20 MB each. Scanned PDFs without a text layer are not supported.",
+          "Library. Upload PDF, Word (.docx), text or Markdown files, up to 20 MB each. Scanned PDF pages are read by automatic text recognition where it is switched on, with a page limit; text read from a scan can contain mistakes.",
           "Status. A document moves through Waiting and Processing to Ready. Only Ready documents are used in answers. A Failed document shows the reason and can be retried.",
           "Ask. Works like the demo, over your own documents, and keeps your conversations in the side panel.",
           "Deleting a document removes it and its indexed text. Earlier answers keep their wording, and their citations to it are marked as removed.",

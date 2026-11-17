@@ -71,3 +71,18 @@ MAIL_FROM="HilaTech Knowledge Studio <no-reply@hilatechdev.com>"
 
 `AUTH_SIGNUP_ENABLED` stays `false` until the owner decides to open sign-up. While
 SES is in the sandbox, opening sign-up only works for verified recipient addresses.
+
+## Scanned PDF pages (OCR)
+
+With `OCR_PROVIDER=bedrock`, a PDF page that has no text layer is rendered to an image in the
+worker and read by a vision-capable chat model on Bedrock (`OCR_MODEL_ID`, default
+`LLM_MODEL_ID`). Pages that already have text are never sent. Each scanned page is one paid
+model call; `OCR_MAX_PAGES` (default 20) caps the scanned pages per file, and the tokens count
+against the organization's daily AI budget and are recorded as `document_ocr` usage.
+
+Text read from a scan can contain mistakes, and accuracy on dense layouts or unusual type
+(Rashi script, pages with commentaries around a main text) has not been measured. With
+`OCR_PROVIDER=none` scanned PDFs are reported as unsupported, as before.
+
+The release that introduces this includes migration `0004_usage_document_ocr.sql`; `deploy.sh`
+runs migrations before starting the new containers.

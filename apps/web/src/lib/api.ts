@@ -33,7 +33,7 @@ export type Me = {
   role: "owner" | "admin" | "member";
   capabilities: { upload: boolean; deleteAnyDocument: boolean; manageMembers: boolean };
   pipeline: { mode: "live" | "sample" | "unconfigured"; answering: boolean; indexing: boolean };
-  limits: { uploadMaxBytes: number; questionsPerDay: number; questionMaxChars: number };
+  limits: { uploadMaxBytes: number; scannedPdfPages: number; questionsPerDay: number; questionMaxChars: number };
 };
 
 export type SourceView = {

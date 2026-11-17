@@ -147,7 +147,61 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
     }
 
     await step("extracting", 15);
-    const extracted = await extractDocument(bytes, fileType, { maxPages: config.UPLOAD_MAX_PAGES, maxChars: 5_000_000 });
+    const reader = services.pageReader ?? null;
+    const ocr = { pages: 0, inputTokens: 0, outputTokens: 0, truncated: 0 };
+    const extracted = await extractDocument(
+      bytes,
+      fileType,
+      { maxPages: config.UPLOAD_MAX_PAGES, maxChars: 5_000_000 },
+      reader
+        ? {
+            maxPages: config.OCR_MAX_PAGES,
+            // One paid model call per scanned page. Budget is reserved before each call and
+            // settled with what the provider reports, so a long scan stops when the budget does.
+            readPage: async (png) => {
+              const estimate = { inputTokens: reader.estimatedInputTokensPerPage, outputTokens: reader.maxOutputTokensPerPage };
+              const reservation = await reserveAiBudget(services, ctx.organizationId, estimate, "reading this scanned document");
+              let reading;
+              try {
+                reading = await reader.readPage(png);
+              } catch (error) {
+                // The call may have been charged; keep the input estimate, release the output.
+                await settleAiBudget(services, reservation, { inputTokens: estimate.inputTokens, outputTokens: 0 });
+                throw error;
+              }
+              const used = { inputTokens: reading.inputTokens ?? estimate.inputTokens, outputTokens: reading.outputTokens ?? estimate.outputTokens };
+              await settleAiBudget(services, reservation, used);
+              ocr.pages += 1;
+              ocr.inputTokens += used.inputTokens;
+              ocr.outputTokens += used.outputTokens;
+              if (reading.truncated) ocr.truncated += 1;
+              return reading.text;
+            },
+          }
+        : undefined,
+    ).finally(async () => {
+      // Recorded even when a later page fails: the calls already made were paid for.
+      if (!reader || ocr.pages === 0) return;
+      await tenant((tx) =>
+        recordUsage(tx, {
+          organizationId: ctx.organizationId,
+          workspaceId: ctx.workspaceId,
+          userId: document.uploadedByUserId,
+          kind: "document_ocr",
+          provider: reader.descriptor.provider,
+          modelId: reader.descriptor.modelId,
+          providerKind: reader.descriptor.kind,
+          inputTokens: ocr.inputTokens,
+          outputTokens: ocr.outputTokens,
+          units: ocr.pages,
+          documentId: document.id,
+          correlationId: data.correlationId,
+        }),
+      ).catch(() => {});
+      log(ocr.truncated ? "warn" : "info", "ingestion.scanned_pages_read", {
+        documentId: document.id, pages: ocr.pages, truncatedPages: ocr.truncated, correlationId: data.correlationId,
+      });
+    });
 
     await step("chunking", 35);
     const maxChars = Math.min(config.CHUNK_MAX_CHARS, embeddings.maxCharsPerText);

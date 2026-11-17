@@ -7,6 +7,9 @@ import {
   AnthropicChatModel,
   BedrockChatModel,
   BedrockCohereEmbeddings,
+  BedrockPageReader,
+  DeterministicPageReader,
+  PAGE_READING_INSTRUCTIONS,
   buildGroundedRequest,
   chunkBlocks,
   CitationStreamFilter,
@@ -20,6 +23,7 @@ import {
   DeterministicChatModel,
   DeterministicEmbeddings,
   extractDocument,
+  looksLikeBrokenFontText,
   inspectZip,
   normalizeForSearch,
   type AnswerEvent,
@@ -121,6 +125,47 @@ describe("extraction", () => {
 
   it("reports a PDF without a text layer as unsupported, not as empty", async () => {
     expect(await codeOf(extractDocument(await fixture("scanned-no-text-layer.pdf"), "pdf"))).toBe("unsupported_scanned_pdf");
+  });
+
+  it("reads scanned pages through a page reader, one call per page, keeping page numbers", async () => {
+    const seen: { pageNumber: number; png: boolean }[] = [];
+    const doc = await extractDocument(await fixture("scanned-no-text-layer.pdf"), "pdf", undefined, {
+      maxPages: 5,
+      readPage: async (png, pageNumber) => {
+        // PNG signature: the reader gets a rendered image, not PDF bytes.
+        seen.push({ pageNumber, png: png[0] === 0x89 && png[1] === 0x50 });
+        return pageNumber === 1 ? "גמרא\nשורה ראשונה\nשורה שנייה" : "   ";
+      },
+    });
+    expect(seen).toEqual([{ pageNumber: 1, png: true }, { pageNumber: 2, png: true }]);
+    expect(doc.pageCount).toBe(2);
+    expect(doc.ocrPages).toEqual([1]); // page 2 came back empty and is not indexed
+    expect(doc.blocks).toEqual([{ text: "גמרא\nשורה ראשונה\nשורה שנייה", pageNumber: 1, sectionPath: null }]);
+  });
+
+  it("refuses more scanned pages than the limit before reading any, and never reads pages that have text", async () => {
+    let calls = 0;
+    const readPage = async () => (calls++, "text");
+    expect(await codeOf(extractDocument(await fixture("scanned-no-text-layer.pdf"), "pdf", undefined, { maxPages: 1, readPage }))).toBe("too_many_pages");
+    expect(calls).toBe(0);
+    const withText = await extractDocument(await sample("customer-support-handbook.pdf"), "pdf", undefined, { maxPages: 5, readPage });
+    expect(calls).toBe(0);
+    expect(withText.ocrPages).toEqual([]);
+  });
+
+  it("recognises a text layer with a broken font mapping, and nothing else", () => {
+    // The start of a real page whose Hebrew came out through a wrong font table.
+    const broken = "]UF VTHL [FU G[HQ]H G[HQ] HO C[HZ\\ RHLN@ GD\\JQD COH [HDLFD COC HSLC [\\UQD ]HUK RLF\\ GC[S >[HDLFD COC GSLC\\ GC[S JIN CHIJ ".repeat(2);
+    expect(looksLikeBrokenFontText(broken)).toBe(true);
+    expect(looksLikeBrokenFontText("לא יאמר אברור עשרה ואטול מהן אחד והשאר פטורין אלא כונסן לדיר ומוציא עשרה ונוטל מהן אחד והשאר מצטרפין לגורן אחר. ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("ANNUAL REPORT 2026 [DRAFT] - SECTION 4: REVENUE BY REGION, TOTALS AND NOTES TO THE ACCOUNTS (UNAUDITED) ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("const rows = items.map((item) => [item.id, item.name]); if (rows[0] < rows[1]) { return rows[0] || {}; } ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("12.50 | 13.75 | 1,204.00 | 88% | [1] [2] [3] | 2026-11-17 | 0.004 | 17:45 | 9,999 | 100% | 3.14159 ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("]UF [FU")).toBe(false); // too short to judge
+  });
+
+  it("fails when the reader finds no text on any page", async () => {
+    expect(await codeOf(extractDocument(await fixture("scanned-no-text-layer.pdf"), "pdf", undefined, { maxPages: 5, readPage: async () => "" }))).toBe("extraction_failed");
   });
 
   it("reports damaged files with a stable code", async () => {
@@ -482,5 +527,47 @@ describe("configuration", () => {
     const secret = (() => { try { parseConfig({ EMBEDDINGS_BATCH_SIZE: "sk-very-secret-value" }); } catch (e) { return (e as Error).message; } })();
     expect(secret).toContain("EMBEDDINGS_BATCH_SIZE");
     expect(secret).not.toContain("sk-very-secret-value");
+  });
+});
+
+describe("page reader (scanned pages)", () => {
+  it("sends the page image and the transcription instructions to Bedrock and reports truncation", async () => {
+    const sent: unknown[] = [];
+    const reader = new BedrockPageReader({
+      region: "us-east-1",
+      modelId: "vision-model",
+      maxOutputTokens: 500,
+      client: {
+        send: async (command: { input: unknown }) => {
+          sent.push(command.input);
+          return { output: { message: { content: [{ text: " שורה א\n" }, { text: "שורה ב " }] } }, stopReason: "max_tokens", usage: { inputTokens: 1200, outputTokens: 500 } };
+        },
+      } as never,
+    });
+    const reading = await reader.readPage(new Uint8Array([1, 2, 3]));
+    expect(reading).toEqual({ text: "שורה א\nשורה ב", truncated: true, inputTokens: 1200, outputTokens: 500 });
+    const input = sent[0] as { modelId: string; system: { text: string }[]; messages: { content: { image?: { format: string; source: { bytes: Uint8Array } } }[] }[]; inferenceConfig: { maxTokens: number } };
+    expect(input.modelId).toBe("vision-model");
+    expect(input.system[0]!.text).toBe(PAGE_READING_INSTRUCTIONS);
+    expect(input.system[0]!.text).toContain("complete anything from memory");
+    expect(input.messages[0]!.content[0]!.image).toEqual({ format: "png", source: { bytes: new Uint8Array([1, 2, 3]) } });
+    expect(input.inferenceConfig.maxTokens).toBe(500);
+  });
+
+  it("wraps provider failures", async () => {
+    const reader = new BedrockPageReader({ region: "us-east-1", modelId: "m", maxOutputTokens: 500, client: { send: async () => { throw Object.assign(new Error("no"), { name: "ThrottlingException" }); } } as never });
+    expect(await codeOf(reader.readPage(new Uint8Array([1])))).toBe("provider_error");
+  });
+
+  it("the test double is labelled as such and does not pretend to read", async () => {
+    const reader = new DeterministicPageReader();
+    expect(reader.descriptor.kind).toBe("test_double");
+    expect((await reader.readPage(new Uint8Array([1]))).text).toContain("test double");
+  });
+
+  it("is off by default, and configuration refuses the test double in production", () => {
+    expect(parseConfig({ APP_ENV: "test" }).OCR_PROVIDER).toBe("none");
+    expect(() => parseConfig({ APP_ENV: "production", OCR_PROVIDER: "deterministic" })).toThrow();
+    expect(() => parseConfig({ APP_ENV: "test", OCR_PROVIDER: "bedrock" })).toThrow(); // no model, no region
   });
 });

@@ -287,7 +287,7 @@ export const usageEvents = pgTable("usage_events", {
   workspaceId: uuid("workspace_id"),
   userId: uuid("user_id"),
   demoSessionId: text("demo_session_id"),
-  kind: text("kind").$type<"chat_completion" | "query_embedding" | "document_embedding">().notNull(),
+  kind: text("kind").$type<"chat_completion" | "query_embedding" | "document_embedding" | "document_ocr">().notNull(),
   provider: text("provider").notNull(),
   modelId: text("model_id").notNull(),
   providerKind: text("provider_kind").$type<"live" | "test_double">().notNull(),

@@ -1,5 +1,6 @@
 import {
   BedrockRuntimeClient,
+  ConverseCommand,
   ConverseStreamCommand,
   InvokeModelCommand,
 } from "@aws-sdk/client-bedrock-runtime";
@@ -11,6 +12,8 @@ import type {
   ChatRequest,
   EmbeddingsDescriptor,
   EmbeddingsProvider,
+  PageReading,
+  PageTextReader,
   ProviderDescriptor,
 } from "./types.ts";
 
@@ -69,6 +72,67 @@ export class BedrockChatModel implements ChatModelProvider {
     } catch (error) {
       if (signal?.aborted) return;
       throw new AppError("provider_error", `Bedrock chat request failed (${errorName(error)})`, { cause: error });
+    }
+  }
+}
+
+/**
+ * Instructions for reading a scanned page. The model is asked for a transcription and nothing
+ * else: text it "remembers" from a well-known book would be indexed and cited as if it were
+ * printed on the page, so completing from memory is ruled out explicitly.
+ */
+export const PAGE_READING_INSTRUCTIONS = [
+  "You transcribe scanned document pages.",
+  "Output only the text that is printed on the page image, in its original language and script, in reading order. Hebrew and Aramaic stay in Hebrew letters, including text printed in Rashi script.",
+  "Do not translate, summarize, explain, correct, or complete anything from memory. Transcribe only what is visible.",
+  "Where a word cannot be read, write [?] in its place.",
+  "When the page has several separate text areas, such as a main text with commentaries printed around it, transcribe each area on its own, one after another, and start each with a heading line: the title printed for that area if there is one, otherwise a short name for its position (for example: main text, inner column, outer column, margin notes).",
+  "Skip decorations and page ornaments. Keep page headers such as the tractate name and page number as the first line.",
+  "If the page contains no text, output nothing.",
+].join("\n");
+
+/**
+ * Reads scanned pages with a vision-capable chat model on Bedrock (Converse API, image input).
+ * NOT YET VERIFIED AGAINST BEDROCK at the time of writing: unit tests use a stubbed client.
+ * Accuracy on dense or unusual typography (Rashi script, multi-column pages) is not measured.
+ */
+export class BedrockPageReader implements PageTextReader {
+  readonly descriptor: ProviderDescriptor;
+  readonly maxOutputTokensPerPage: number;
+  readonly estimatedInputTokensPerPage = 2500;
+  private readonly client: Sender;
+
+  constructor(options: { region: string; modelId: string; maxOutputTokens: number; client?: Sender }) {
+    this.descriptor = { provider: "bedrock", modelId: options.modelId, kind: "live" };
+    this.maxOutputTokensPerPage = options.maxOutputTokens;
+    this.client = options.client ?? new BedrockRuntimeClient({ region: options.region, maxAttempts: 2 });
+  }
+
+  async readPage(png: Uint8Array, signal?: AbortSignal): Promise<PageReading> {
+    try {
+      const response = await this.client.send(
+        new ConverseCommand({
+          modelId: this.descriptor.modelId,
+          system: [{ text: PAGE_READING_INSTRUCTIONS }],
+          messages: [
+            {
+              role: "user",
+              content: [{ image: { format: "png", source: { bytes: png } } }, { text: "Transcribe this page." }],
+            },
+          ],
+          inferenceConfig: { maxTokens: this.maxOutputTokensPerPage, temperature: 0 },
+        }),
+        { abortSignal: signal },
+      );
+      const text = (response.output?.message?.content ?? []).map((part) => part.text ?? "").join("");
+      return {
+        text: text.trim(),
+        truncated: response.stopReason === "max_tokens",
+        inputTokens: response.usage?.inputTokens ?? null,
+        outputTokens: response.usage?.outputTokens ?? null,
+      };
+    } catch (error) {
+      throw new AppError("provider_error", `Bedrock page reading failed (${errorName(error)})`, { cause: error });
     }
   }
 }

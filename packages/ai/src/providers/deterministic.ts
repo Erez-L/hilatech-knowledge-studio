@@ -10,7 +10,7 @@
  */
 import { createHash } from "node:crypto";
 import { normalizeForSearch } from "../text/normalize.ts";
-import type { ChatEvent, ChatModelProvider, ChatRequest, EmbeddingsDescriptor, EmbeddingsProvider, ProviderDescriptor } from "./types.ts";
+import type { ChatEvent, ChatModelProvider, ChatRequest, EmbeddingsDescriptor, EmbeddingsProvider, PageReading, PageTextReader, ProviderDescriptor } from "./types.ts";
 
 export const DETERMINISTIC_MODEL_ID = "deterministic-test-double-v1";
 
@@ -102,4 +102,19 @@ export class DeterministicChatModel implements ChatModelProvider {
 function firstSentences(text: string, count: number): string {
   const sentences = text.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+/g);
   return (sentences ? sentences.slice(0, count).join("") : text).trim();
+}
+
+/**
+ * Stand-in for the page reader. It does NOT read the image: it returns a fixed sentence with a
+ * fingerprint of the image bytes, so tests can tell pages apart and prove the plumbing.
+ */
+export class DeterministicPageReader implements PageTextReader {
+  readonly descriptor: ProviderDescriptor = { provider: "deterministic", modelId: DETERMINISTIC_MODEL_ID, kind: "test_double" };
+  readonly maxOutputTokensPerPage = 200;
+  readonly estimatedInputTokensPerPage = 100;
+  async readPage(png: Uint8Array): Promise<PageReading> {
+    const fingerprint = createHash("sha256").update(png).digest("hex").slice(0, 12);
+    const text = `Sample transcription of a scanned page, produced by a test double and not read from the image. Page image ${fingerprint}.`;
+    return { text, truncated: false, inputTokens: 100, outputTokens: 40 };
+  }
 }

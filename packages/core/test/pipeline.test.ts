@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   DeterministicChatModel,
   DeterministicEmbeddings,
+  DeterministicPageReader,
   EmbeddingInputTooLongError,
   estimateCohereTokens,
   type ChatEvent,
@@ -426,6 +427,56 @@ async function ingestInline(custom: Services, ctx: TenantContext & { userId: str
 const hebrewSentence = "לקוחות בתוכנית Growth זכאים להחזר מלא בתוך 30 יום ממועד הרכישה, בכפוף לאישור של ראש הצוות. ";
 const withConfig = (overrides: Record<string, string>): Services => ({ ...services, config: parseConfig({ ...baseEnv, ...overrides }) });
 const used = (ctx: TenantContext) => withTenant(database.db, ctx.organizationId, (tx) => budgetUsed(tx, ctx.organizationId));
+
+describe("scanned PDFs with a page reader", () => {
+  const scannedPdf = () => readFile(path.join(here, "..", "..", "ai", "test", "fixtures", "scanned-no-text-layer.pdf"));
+  async function ingestBytes(custom: Services, ctx: TenantContext & { userId: string }, filename: string, bytes: Uint8Array) {
+    const jobs: IngestionJobData[] = [];
+    const inline: Services = { ...custom, queue: { enqueueIngestion: async (data) => void jobs.push(data) } };
+    const document = await uploadDocument(inline, ctx, { kind: "user", userId: ctx.userId }, { filename, bytes, correlationId: randomUUID() });
+    const error = await ingestDocument(inline, jobs[0]!, { attempt: 1, finalAttempt: true }).then(() => null, (e) => (e as { code?: string }).code ?? String(e));
+    const stored = await withTenant(database.db, ctx.organizationId, (tx) => getDocument(tx, ctx, document.id));
+    const chunks = await withTenant(database.db, ctx.organizationId, (tx) => listDocumentChunks(tx, ctx, document.id));
+    return { document: stored!, chunks, error };
+  }
+  const ocrUsage = async (ctx: TenantContext, documentId: string) => {
+    const result = await withTenant(database.db, ctx.organizationId, (tx) =>
+      tx.execute(sql`select kind, units, input_tokens, output_tokens, provider_kind from usage_events where document_id = ${documentId} and kind = 'document_ocr'`),
+    );
+    return [...((result as unknown as { rows?: unknown[] }).rows ?? (result as unknown as unknown[]))];
+  };
+
+  it("indexes the scanned pages with their page numbers, counts the tokens against the budget and records usage", async () => {
+    const t = await tenant("ocr-ready");
+    const before = await used(t);
+    const { document, chunks, error } = await ingestBytes({ ...services, pageReader: new DeterministicPageReader() }, t, "scan.pdf", await scannedPdf());
+    expect(error).toBeNull();
+    expect(document).toMatchObject({ status: "ready", pageCount: 2 });
+    expect(chunks.map((c) => c.pageNumber).sort()).toEqual([1, 2]);
+    expect(chunks[0]!.text).toContain("test double");
+    const after = await used(t);
+    expect(after.outputTokens - before.outputTokens).toBe(80); // 2 pages × 40 reported by the reader
+    const rows = await ocrUsage(t, document.id);
+    expect(rows).toEqual([{ kind: "document_ocr", units: 2, input_tokens: 200, output_tokens: 80, provider_kind: "test_double" }]);
+  });
+
+  it("stops before the model is called when the budget does not cover a page", async () => {
+    const t = await tenant("ocr-budget");
+    let calls = 0;
+    const reader = Object.assign(new DeterministicPageReader(), { readPage: async () => (calls++, { text: "x", truncated: false, inputTokens: 1, outputTokens: 1 }) });
+    const { document, error } = await ingestBytes({ ...withConfig({ BUDGET_DAILY_OUTPUT_TOKENS: "100" }), pageReader: reader }, t, "scan.pdf", await scannedPdf());
+    expect(error).toBe("budget_exceeded");
+    expect(calls).toBe(0);
+    expect(document).toMatchObject({ status: "failed", failureCode: "budget_exceeded" });
+  });
+
+  it("refuses a scan with more pages than OCR_MAX_PAGES", async () => {
+    const t = await tenant("ocr-pages");
+    const { document, error } = await ingestBytes({ ...withConfig({ OCR_MAX_PAGES: "1" }), pageReader: new DeterministicPageReader() }, t, "scan.pdf", await scannedPdf());
+    expect(error).toBe("too_many_pages");
+    expect(document.status).toBe("failed");
+  });
+});
 
 describe("embedding length limits", () => {
   it("sizes Hebrew and mixed text to the model's token estimate before embedding, without losing text or location", async () => {

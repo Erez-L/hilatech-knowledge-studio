@@ -1,8 +1,8 @@
 import { AppError, type Config } from "@hks/shared";
 import { AnthropicChatModel } from "./anthropic.ts";
-import { BedrockChatModel, BedrockCohereEmbeddings } from "./bedrock.ts";
-import { DeterministicChatModel, DeterministicEmbeddings } from "./deterministic.ts";
-import type { ChatModelProvider, EmbeddingsProvider } from "./types.ts";
+import { BedrockChatModel, BedrockCohereEmbeddings, BedrockPageReader } from "./bedrock.ts";
+import { DeterministicChatModel, DeterministicEmbeddings, DeterministicPageReader } from "./deterministic.ts";
+import type { ChatModelProvider, EmbeddingsProvider, PageTextReader } from "./types.ts";
 
 /**
  * Builds providers from configuration. Returns null for a provider set to
@@ -39,6 +39,22 @@ export function createChatModel(config: Config): ChatModelProvider | null {
       });
     case "bedrock":
       return new BedrockChatModel({ region: region(config), modelId: config.LLM_MODEL_ID! });
+  }
+}
+
+/** Reader for scanned PDF pages; null when OCR is off, and scanned PDFs are then reported as unsupported. */
+export function createPageReader(config: Config): PageTextReader | null {
+  switch (config.OCR_PROVIDER) {
+    case "none":
+      return null;
+    case "deterministic":
+      return new DeterministicPageReader();
+    case "bedrock":
+      return new BedrockPageReader({
+        region: region(config),
+        modelId: (config.OCR_MODEL_ID ?? config.LLM_MODEL_ID)!,
+        maxOutputTokens: config.OCR_MAX_OUTPUT_TOKENS,
+      });
   }
 }
 

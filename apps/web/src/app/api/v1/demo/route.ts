@@ -32,7 +32,7 @@ export const GET = route(async ({ request, requestId }) => {
         role: "member",
         capabilities: { upload: false, deleteAnyDocument: false, manageMembers: false },
         pipeline: { mode: config.pipelineMode, answering: true, indexing: false },
-        limits: { uploadMaxBytes: 0, questionsPerDay: config.LIMIT_DEMO_QUESTIONS_PER_SESSION, questionMaxChars: 2000 },
+        limits: { uploadMaxBytes: 0, scannedPdfPages: 0, questionsPerDay: config.LIMIT_DEMO_QUESTIONS_PER_SESSION, questionMaxChars: 2000 },
       },
       documents: documents.filter((d) => d.status === "ready").map((d) => documentView(d)),
     },

@@ -1,4 +1,4 @@
-import type { ChatModelProvider, EmbeddingsProvider } from "@hks/ai";
+import type { ChatModelProvider, EmbeddingsProvider, PageTextReader } from "@hks/ai";
 import type { Db } from "@hks/database";
 import type { Config } from "@hks/shared";
 import type { ObjectStorage } from "./storage.ts";
@@ -24,6 +24,8 @@ export type Services = {
   /** null when not configured: features that need it report that, they never fake output. */
   embeddings: EmbeddingsProvider | null;
   chat: ChatModelProvider | null;
+  /** Reads scanned PDF pages. Absent or null: scanned PDFs are reported as unsupported. */
+  pageReader?: PageTextReader | null;
 };
 
 /** Who is acting, for audit records. */
