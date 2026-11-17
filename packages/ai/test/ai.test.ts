@@ -23,6 +23,7 @@ import {
   DeterministicChatModel,
   DeterministicEmbeddings,
   extractDocument,
+  looksLikeBrokenFontText,
   inspectZip,
   normalizeForSearch,
   type AnswerEvent,
@@ -150,6 +151,17 @@ describe("extraction", () => {
     const withText = await extractDocument(await sample("customer-support-handbook.pdf"), "pdf", undefined, { maxPages: 5, readPage });
     expect(calls).toBe(0);
     expect(withText.ocrPages).toEqual([]);
+  });
+
+  it("recognises a text layer with a broken font mapping, and nothing else", () => {
+    // The start of a real page whose Hebrew came out through a wrong font table.
+    const broken = "]UF VTHL [FU G[HQ]H G[HQ] HO C[HZ\\ RHLN@ GD\\JQD COH [HDLFD COC HSLC [\\UQD ]HUK RLF\\ GC[S >[HDLFD COC GSLC\\ GC[S JIN CHIJ ".repeat(2);
+    expect(looksLikeBrokenFontText(broken)).toBe(true);
+    expect(looksLikeBrokenFontText("לא יאמר אברור עשרה ואטול מהן אחד והשאר פטורין אלא כונסן לדיר ומוציא עשרה ונוטל מהן אחד והשאר מצטרפין לגורן אחר. ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("ANNUAL REPORT 2026 [DRAFT] - SECTION 4: REVENUE BY REGION, TOTALS AND NOTES TO THE ACCOUNTS (UNAUDITED) ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("const rows = items.map((item) => [item.id, item.name]); if (rows[0] < rows[1]) { return rows[0] || {}; } ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("12.50 | 13.75 | 1,204.00 | 88% | [1] [2] [3] | 2026-11-17 | 0.004 | 17:45 | 9,999 | 100% | 3.14159 ".repeat(2))).toBe(false);
+    expect(looksLikeBrokenFontText("]UF [FU")).toBe(false); // too short to judge
   });
 
   it("fails when the reader finds no text on any page", async () => {

@@ -63,16 +63,17 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?:
   } else {
     // Pages without a text layer. In a PDF that otherwise has text, an empty page is usually a
     // full-page figure or scan; in a scanned PDF it is every page.
-    const empty = pages.flatMap((page, index) => (inkOf(page) < SCANNED_PAGE_MAX_CHARS ? [index + 1] : []));
+    // A page whose text layer is unreadable (see looksLikeBrokenFontText) is read the same way.
+    const empty = pages.flatMap((page, index) => (inkOf(page) < SCANNED_PAGE_MAX_CHARS || looksLikeBrokenFontText(page) ? [index + 1] : []));
     if (empty.length > scanned.maxPages) {
       throw new AppError("too_many_pages", `The PDF has ${empty.length} scanned pages; up to ${scanned.maxPages} can be read`);
     }
     for (const pageNumber of empty) {
       const png = await renderPdfPage(bytes, pageNumber, SCANNED_PAGE_RENDER_SCALE);
       const text = (await scanned.readPage(png, pageNumber)).trim();
-      if (!text) continue;
+      // Whatever the text layer held is dropped either way: it was empty or unreadable.
       pages[pageNumber - 1] = text;
-      ocrPages.push(pageNumber);
+      if (text) ocrPages.push(pageNumber);
     }
     if (pages.reduce((sum, page) => sum + inkOf(page), 0) === 0) {
       throw new AppError("extraction_failed", "No text was found in the file");
@@ -98,6 +99,27 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?:
 const SCANNED_PAGE_MAX_CHARS = 15;
 /** 72 dpi × 2.5 = 180 dpi: enough for small print without making the image needlessly large. */
 const SCANNED_PAGE_RENDER_SCALE = 2.5;
+
+/**
+ * True when a page's text layer is not real text: the PDF's font maps its glyphs to the wrong
+ * characters, so Hebrew comes out as runs like "]UF VTHL [FU G[HQ]H". The page looks fine on
+ * screen and prints fine, but the extracted text is useless for search and must not be indexed.
+ *
+ * The test is deliberately narrow, to avoid sending good pages to a paid model call: the page
+ * must have a fair amount of text, almost none of it lowercase Latin or any non-Latin script
+ * (real prose in any language has plenty of one or the other), mostly upper-case letters, and a noticeable share of
+ * bracket-and-backslash symbols, which such font tables use as letters and prose hardly uses.
+ * Upper-case headings, tables of numbers and source code do not match.
+ */
+export function looksLikeBrokenFontText(page: string): boolean {
+  const ink = page.replace(/\s/g, "");
+  if (ink.length < 80) return false;
+  const count = (pattern: RegExp) => ink.match(pattern)?.length ?? 0;
+  const natural = count(/[a-z]|[^\u0000-\u007F]/g);
+  const upper = count(/[A-Z]/g);
+  const mappingSymbols = count(/[[\]\\@<>^_`{}~]/g);
+  return natural / ink.length < 0.1 && upper / ink.length >= 0.4 && mappingSymbols / ink.length >= 0.06;
+}
 
 /**
  * Removes running headers and footers: short lines that repeat on most pages
