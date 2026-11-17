@@ -1,7 +1,7 @@
 "use client";
 
 import { Menu } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/cn";
@@ -18,8 +18,14 @@ const sections = [
   { key: "contact", href: "#contact" },
 ] as const;
 
-export function MarketingHeader() {
+/**
+ * `standalone` is for pages other than the landing page: the section links then point back to
+ * the landing page's sections instead of to anchors that do not exist on the current page.
+ */
+export function MarketingHeader({ standalone = false }: { standalone?: boolean }) {
   const t = useTranslations("nav");
+  const locale = useLocale();
+  const sectionHref = (hash: string) => (standalone ? `/${locale}${hash}` : hash);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -47,7 +53,7 @@ export function MarketingHeader() {
           <ul className="flex items-center gap-1">
             {sections.slice(0, 3).map((item) => (
               <li key={item.key}>
-                <a href={item.href} className={navLinkClass}>
+                <a href={sectionHref(item.href)} className={navLinkClass}>
                   {t(item.key)}
                 </a>
               </li>
@@ -58,7 +64,12 @@ export function MarketingHeader() {
               </Link>
             </li>
             <li>
-              <a href="#contact" className={navLinkClass}>
+              <Link href="/help" className={navLinkClass}>
+                {t("help")}
+              </Link>
+            </li>
+            <li>
+              <a href={sectionHref("#contact")} className={navLinkClass}>
                 {t("contact")}
               </a>
             </li>
@@ -97,12 +108,19 @@ export function MarketingHeader() {
                   {[...sections.slice(0, 3), { key: "contact" as const, href: "#contact" }].map((item) => (
                     <li key={item.key} className="border-b border-border">
                       <SheetClose asChild>
-                        <a href={item.href} className="flex min-h-14 items-center text-[1.375rem] font-bold tracking-(--tracking-heading)">
+                        <a href={sectionHref(item.href)} className="flex min-h-14 items-center text-[1.375rem] font-bold tracking-(--tracking-heading)">
                           {t(item.key)}
                         </a>
                       </SheetClose>
                     </li>
                   ))}
+                  <li className="border-b border-border">
+                    <SheetClose asChild>
+                      <Link href="/help" className="flex min-h-14 items-center text-[1.375rem] font-bold tracking-(--tracking-heading)">
+                        {t("help")}
+                      </Link>
+                    </SheetClose>
+                  </li>
                 </ul>
                 <Button asChild size="lg" className="mt-6 w-full">
                   <Link href="/demo">{t("cta")}</Link>

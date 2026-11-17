@@ -1,15 +1,18 @@
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Logo } from "@/components/shared/logo";
 
-export function MarketingFooter() {
+/** `standalone`: see MarketingHeader. */
+export function MarketingFooter({ standalone = false }: { standalone?: boolean }) {
   const t = useTranslations("footer");
   const nav = useTranslations("nav");
+  const locale = useLocale();
+  const base = standalone ? `/${locale}` : "";
   const links = [
-    { label: nav("product"), href: "#product" },
-    { label: nav("how"), href: "#how-it-works" },
-    { label: nav("useCases"), href: "#use-cases" },
-    { label: nav("contact"), href: "#contact" },
+    { label: nav("product"), href: `${base}#product` },
+    { label: nav("how"), href: `${base}#how-it-works` },
+    { label: nav("useCases"), href: `${base}#use-cases` },
+    { label: nav("contact"), href: `${base}#contact` },
   ];
   return (
     <footer className="bg-stage text-on-stage">
@@ -31,6 +34,11 @@ export function MarketingFooter() {
               <li>
                 <Link href="/demo" className="text-on-stage-muted transition-colors hover:text-on-stage">
                   {nav("demo")}
+                </Link>
+              </li>
+              <li>
+                <Link href="/help" className="text-on-stage-muted transition-colors hover:text-on-stage">
+                  {nav("help")}
                 </Link>
               </li>
             </ul>
