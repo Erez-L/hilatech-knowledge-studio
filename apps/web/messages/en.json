@@ -30,7 +30,8 @@
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "menuTitle": "Menu",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "help": "Help"
   },
   "hero": {
     "title": "Your knowledge, finally within reach.",
@@ -440,6 +441,135 @@
       "usage": "{limit} questions per demo session",
       "emptyTitle": "Ask the Northstar documents",
       "emptyBody": "Northstar Business Services is a fictional company. Ask about its twelve sample documents, in English or Hebrew, and every answer shows the passages it is based on."
+    }
+  },
+  "help": {
+    "metaTitle": "Help",
+    "metaDescription": "What HilaTech Knowledge Studio does and how to use it: asking questions, reading answers and sources, the demo and the workspace.",
+    "eyebrow": "Help",
+    "title": "How to use Knowledge Studio",
+    "lead": "Knowledge Studio answers questions from your own documents and shows the passage behind every statement. This page explains what it does and how to use it.",
+    "tocLabel": "On this page",
+    "demoCta": "Open the demo",
+    "contactCta": "Contact us",
+    "sections": {
+      "what": {
+        "title": "What Knowledge Studio does",
+        "paragraphs": [
+          "You give it documents: policies, handbooks, catalogs, procedures. You ask a question in plain language. It finds the passages that answer the question, writes a short answer from them, and marks each statement with the source it came from.",
+          "It answers only from the documents in the library. It does not use general knowledge from the internet, and when the documents do not cover a question it says so instead of guessing."
+        ],
+        "points": []
+      },
+      "how": {
+        "title": "How it works",
+        "paragraphs": [
+          "Four things happen between a file and an answer."
+        ],
+        "points": [
+          "Reading. Each document is read and split into short passages. Page numbers and headings are kept.",
+          "Indexing. Every passage is stored by its meaning, so a question can find it even when it uses different words, or a different language.",
+          "Retrieving. When you ask, the passages closest in meaning to your question are found. Only passages from your own organization are searched.",
+          "Answering. The answer is written from those passages only, and each statement carries a numbered citation."
+        ]
+      },
+      "demo": {
+        "title": "Trying the demo",
+        "paragraphs": [
+          "The demo needs no account. It holds twelve documents of Northstar Business Services, a fictional company: six in English and the same six in Hebrew."
+        ],
+        "points": [
+          "Open the demo from the menu.",
+          "Choose one of the suggested questions, or type your own in the box at the bottom and press Enter.",
+          "Read the answer, then select a citation number to see the passage it relies on.",
+          "Ask a follow-up in the same conversation, or start again with New chat."
+        ]
+      },
+      "asking": {
+        "title": "Asking good questions",
+        "paragraphs": [],
+        "points": [
+          "Ask the way you would ask a colleague: “Who approves a refund above $400?”",
+          "Ask one thing at a time. Two questions in one sentence work, but separate questions are easier to check.",
+          "Name the plan, product or policy you mean when several are similar.",
+          "You can ask in Hebrew or in English, whatever language the document is written in.",
+          "A question can be up to 2,000 characters."
+        ]
+      },
+      "reading": {
+        "title": "Reading an answer",
+        "paragraphs": [],
+        "points": [
+          "Citation numbers. The small number after a statement points to its source. Select it to open the evidence panel.",
+          "Evidence panel. It shows the document, the page and the passage, with the quoted part highlighted. The answer is a summary of that passage, so the passage is what to rely on.",
+          "Sources. The button under the answer lists every source the answer used.",
+          "Copy answer. Copies the text of the answer.",
+          "An answer without any citation is marked as unchecked. Treat it with caution."
+        ]
+      },
+      "noAnswer": {
+        "title": "When there is no answer",
+        "paragraphs": [
+          "If the documents do not contain the information, the reply is: “I couldn't find reliable information about that in the available documents.” This is the intended behaviour. It means the library has no passage that supports an answer, not that something is broken.",
+          "If you expected an answer, check that the document is in the library and shows as Ready, and try naming the subject more specifically."
+        ],
+        "points": []
+      },
+      "languages": {
+        "title": "Languages and display",
+        "paragraphs": [],
+        "points": [
+          "The site is available in English and in Hebrew. Use the language switch in the header; Hebrew is shown right to left.",
+          "Answers come in the language of the question.",
+          "The sun and moon button switches between the light and the dark theme."
+        ]
+      },
+      "limits": {
+        "title": "Limits of the public demo",
+        "paragraphs": [
+          "The demo is open to everyone, so it is limited."
+        ],
+        "points": [
+          "15 questions per visitor session.",
+          "4 questions per minute from one address.",
+          "300 questions per day for all visitors together.",
+          "Documents cannot be uploaded in the demo, and the sample documents cannot be changed.",
+          "Northstar Business Services and everything in its documents are invented."
+        ]
+      },
+      "workspace": {
+        "title": "The workspace, for signed-in teams",
+        "paragraphs": [
+          "A signed-in organization gets a private workspace with its own library. New accounts are not open on this demonstration site; use the contact form to ask for access."
+        ],
+        "points": [
+          "Library. Upload PDF, Word (.docx), text or Markdown files, up to 20 MB each. Scanned PDFs without a text layer are not supported.",
+          "Status. A document moves through Waiting and Processing to Ready. Only Ready documents are used in answers. A Failed document shows the reason and can be retried.",
+          "Ask. Works like the demo, over your own documents, and keeps your conversations in the side panel.",
+          "Deleting a document removes it and its indexed text. Earlier answers keep their wording, and their citations to it are marked as removed.",
+          "Roles. Owners and admins manage documents and members; members ask questions."
+        ]
+      },
+      "privacy": {
+        "title": "Privacy and trust",
+        "paragraphs": [],
+        "points": [
+          "Documents are kept in private storage and are used only to answer questions inside their own organization.",
+          "Every organization is separate. People see only the documents of the organization they belong to.",
+          "Text inside a document is treated as content, never as an instruction to the assistant.",
+          "An answer is a summary. For a decision that matters, read the cited passage."
+        ]
+      },
+      "faq": {
+        "title": "Common questions",
+        "paragraphs": [],
+        "points": [
+          "Why did it cite the English document when I asked in Hebrew, or the other way round? In the demo every document exists in both languages with the same content, and either edition can support the answer.",
+          "Can it answer from two documents at once? Yes. Each statement cites its own source.",
+          "Does it remember earlier questions? Inside one conversation, yes. A new chat starts fresh.",
+          "Why was my question refused? Either the documents do not cover it, or a demo limit was reached. The message says which."
+        ]
+      }
     }
   }
 }
