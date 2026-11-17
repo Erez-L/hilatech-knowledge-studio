@@ -53,6 +53,19 @@ function useAuthMessages() {
   return { validate, describe };
 }
 
+/** POSTs JSON to one of our own endpoints. Returns null on success, or the status and code of the failure. */
+async function postJson(path: string, body: object): Promise<AuthError> {
+  try {
+    const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (response.ok) return null;
+    const payload = (await response.json().catch(() => null)) as { error?: { code?: string } } | null;
+    const code = payload?.error?.code;
+    return { status: response.status, code: code === "forbidden" ? "SIGN_UP_DISABLED" : code };
+  } catch {
+    return { status: 0 };
+  }
+}
+
 function focusFirst(form: HTMLFormElement | null, errors: Errors) {
   const first = (["name", "email", "password"] as const).find((field) => errors[field]);
   if (first) form?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus();
@@ -171,6 +184,77 @@ export function SignInForm() {
 
 /* ------------------------------------------------------------------ sign up */
 
+/** Shown instead of the form while new accounts are not open. */
+export function SignUpClosed() {
+  const t = useTranslations("auth");
+  return (
+    <FormShell
+      title={t("signUpClosedTitle")}
+      body={t("signUpClosedBody")}
+      footer={
+        <>
+          {t("haveAccount")}{" "}
+          <Link href="/sign-in" className={linkClass}>
+            {t("signIn")}
+          </Link>
+        </>
+      }
+    >
+      <Button asChild size="lg" variant="outline" className="w-full">
+        <Link href="/demo">{t("signUpClosedDemo")}</Link>
+      </Button>
+    </FormShell>
+  );
+}
+
+/** The page the confirmation link opens. Pressing the button creates the account. */
+export function VerifyEmail({ token }: { token: string | null }) {
+  const t = useTranslations("auth");
+  const { describe } = useAuthMessages();
+  const [state, setState] = useState<"ready" | "working" | "done" | "invalid">(token ? "ready" : "invalid");
+  const [alert, setAlert] = useState<string | null>(null);
+
+  async function confirm() {
+    setState("working");
+    setAlert(null);
+    const error = await postJson("/api/v1/auth/verify", { token });
+    if (!error) return setState("done");
+    if (error.status === 404 || error.status === 422) return setState("invalid");
+    setAlert(describe(error));
+    setState("ready");
+  }
+
+  if (state === "done") {
+    return (
+      <Notice title={t("verifiedTitle")} body={t("verifiedBody")}>
+        <Button asChild>
+          <Link href="/sign-in">{t("signIn")}</Link>
+        </Button>
+      </Notice>
+    );
+  }
+  if (state === "invalid") {
+    return (
+      <Notice title={t("verifyInvalidTitle")} body={t("verifyInvalidBody")}>
+        <Button asChild variant="outline">
+          <Link href="/sign-up">{t("createAccount")}</Link>
+        </Button>
+      </Notice>
+    );
+  }
+  return (
+    <FormShell title={t("verifyTitle")} body={t("verifyBody")}>
+      <div className="flex flex-col gap-5">
+        <FormAlert>{alert}</FormAlert>
+        <Button size="lg" className="w-full disabled:opacity-80" disabled={state === "working"} onClick={confirm}>
+          {state === "working" && <LoaderCircle className="animate-spin" aria-hidden />}
+          {state === "working" ? t("verifying") : t("verifyConfirm")}
+        </Button>
+      </div>
+    </FormShell>
+  );
+}
+
 export function SignUpForm() {
   const t = useTranslations("auth");
   const locale = useLocale();
@@ -191,14 +275,8 @@ export function SignUpForm() {
     if (Object.keys(found).length) return focusFirst(formRef.current, found);
     setPending(true);
     const email = values.email.trim();
-    const { error } = await authClient.signUp.email({
-      name: values.name.trim(),
-      email,
-      password: values.password,
-      callbackURL: `/${locale}/app`,
-      // Stored on the user so emails arrive in their language.
-      ...({ locale } as object),
-    });
+    // Nothing is stored in the database yet: the account is created when the link in the email is confirmed.
+    const error = await postJson("/api/v1/auth/register", { name: values.name.trim(), email, password: values.password, locale });
     setPending(false);
     if (error) return setAlert(describe(error));
     setSentTo(email);
@@ -210,7 +288,7 @@ export function SignUpForm() {
         <Button
           variant="outline"
           onClick={async () => {
-            const { error } = await authClient.sendVerificationEmail({ email: sentTo, callbackURL: `/${locale}/app` });
+            const error = await postJson("/api/v1/auth/register/resend", { email: sentTo, locale });
             setResent(!error);
           }}
         >

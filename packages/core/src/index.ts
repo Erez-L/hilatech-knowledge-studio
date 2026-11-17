@@ -6,3 +6,4 @@ export * from "./queue.ts";
 export * from "./mail.ts";
 export * from "./rate-limit.ts";
 export * from "./budget.ts";
+export * from "./registration.ts";
