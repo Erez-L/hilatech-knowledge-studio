@@ -63,10 +63,12 @@ const schema = z.object({
   AUTH_SESSION_IDLE_MINUTES: int(60, 5),
 
   // "file" appends messages to a local outbox for development and tests. It never sends anything.
-  MAIL_TRANSPORT: z.enum(["file", "smtp", "none"]).default("none"),
+  MAIL_TRANSPORT: z.enum(["file", "smtp", "ses", "none"]).default("none"),
   MAIL_FROM: z.string().default("HilaTech Knowledge Studio <no-reply@localhost>"),
   MAIL_OUTBOX_FILE: z.string().default(".data/mail/outbox.jsonl"),
   SMTP_URL: z.string().optional(),
+  // Region of the Amazon SES identity; falls back to AWS_REGION.
+  SES_REGION: z.string().optional(),
 
   LIMIT_AUTH_ATTEMPTS_PER_MINUTE: int(10, 1),
 
@@ -112,6 +114,10 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
   if (needsBedrock && !(c.BEDROCK_REGION ?? c.AWS_REGION)) problems.push("AWS_REGION or BEDROCK_REGION is required");
   if (c.STORAGE_DRIVER === "s3" && !c.S3_BUCKET) problems.push("S3_BUCKET is required");
   if (c.MAIL_TRANSPORT === "smtp" && !c.SMTP_URL) problems.push("SMTP_URL is required");
+  if (c.MAIL_TRANSPORT === "ses" && !(c.SES_REGION ?? c.AWS_REGION)) problems.push("AWS_REGION or SES_REGION is required");
+  if (c.MAIL_TRANSPORT === "ses" && /@localhost>?\s*$/.test(c.MAIL_FROM)) {
+    problems.push("MAIL_FROM must be an address on a domain verified in Amazon SES");
+  }
   if (c.MAIL_TRANSPORT === "file" && c.APP_ENV === "production") {
     problems.push("MAIL_TRANSPORT=file is a development outbox and cannot be used in production");
   }

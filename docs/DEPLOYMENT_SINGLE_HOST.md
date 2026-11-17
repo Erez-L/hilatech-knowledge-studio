@@ -47,3 +47,27 @@ To go back before pruning: `./deploy.sh <previous tag>`.
 ## State on 2026-11-17
 
 Image `v0.1.0`. Chat model `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku 5.5 was not available to the account). `APP_ENV=demo`, sign-up off, mail off, thresholds 0.4 / 0.5. The compose file on the host was patched by hand for the service names; it matches this repository from the commit that adds this document.
+
+## Email (Amazon SES)
+
+The app sends sign-up confirmation and password-reset mail through Amazon SES with
+`MAIL_TRANSPORT=ses`. Nothing is stored for this: the AWS SDK uses the server's
+instance role (`hilatech-demo-server`), whose `ses-send` policy allows `ses:SendEmail`
+only from `no-reply@hilatechdev.com`.
+
+State on 2026-11-17 (us-east-1):
+
+- Domain identity `hilatechdev.com` is verified and DKIM-signed (shared with the SaaS).
+- The SES account is in the **sandbox**: 200 messages a day, and only to recipient
+  addresses that are themselves verified in SES. An earlier production-access
+  request shows as denied.
+
+To turn mail on, set in `/opt/knowledge-studio/.env` and run `./deploy.sh <tag>`:
+
+```
+MAIL_TRANSPORT=ses
+MAIL_FROM="HilaTech Knowledge Studio <no-reply@hilatechdev.com>"
+```
+
+`AUTH_SIGNUP_ENABLED` stays `false` until the owner decides to open sign-up. While
+SES is in the sandbox, opening sign-up only works for verified recipient addresses.

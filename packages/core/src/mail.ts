@@ -45,9 +45,56 @@ export class SmtpMailer implements Mailer {
   }
 }
 
+/** The one SES call the mailer needs; lets tests replace the AWS client. */
+export type SesSend = (input: { from: string; to: string; subject: string; text: string }) => Promise<void>;
+
+/**
+ * Amazon SES through the AWS SDK. Credentials come from the default provider
+ * chain (the server's instance role), so no SMTP password or access key is
+ * stored anywhere. While the SES account is in the sandbox, SES only delivers
+ * to verified recipient addresses.
+ */
+export class SesMailer implements Mailer {
+  private sendWith: SesSend | undefined;
+  constructor(private readonly region: string, private readonly from: string, sendWith?: SesSend) {
+    this.sendWith = sendWith;
+  }
+  private async client(): Promise<SesSend> {
+    if (this.sendWith) return this.sendWith;
+    const { SESv2Client, SendEmailCommand } = await import("@aws-sdk/client-sesv2");
+    const client = new SESv2Client({ region: this.region });
+    this.sendWith = async ({ from, to, subject, text }) => {
+      await client.send(
+        new SendEmailCommand({
+          FromEmailAddress: from,
+          Destination: { ToAddresses: [to] },
+          Content: {
+            Simple: {
+              Subject: { Data: subject, Charset: "UTF-8" },
+              Body: { Text: { Data: text, Charset: "UTF-8" } },
+            },
+          },
+        }),
+      );
+    };
+    return this.sendWith;
+  }
+  async send(message: MailMessage) {
+    try {
+      const send = await this.client();
+      await send({ from: this.from, to: message.to, subject: message.subject, text: message.text });
+      log("info", "mail.sent", { kind: message.kind, transport: "ses" });
+    } catch (error) {
+      log("error", "mail.failed", { kind: message.kind, transport: "ses", name: (error as Error).name });
+      throw new AppError("internal", "The email could not be sent");
+    }
+  }
+}
+
 /** Returns null when mail is not configured; callers must then say so. */
 export function createMailer(config: Config): Mailer | null {
   if (config.MAIL_TRANSPORT === "file") return new FileOutboxMailer(config.MAIL_OUTBOX_FILE, config.MAIL_FROM);
   if (config.MAIL_TRANSPORT === "smtp") return new SmtpMailer(config.SMTP_URL!, config.MAIL_FROM);
+  if (config.MAIL_TRANSPORT === "ses") return new SesMailer((config.SES_REGION ?? config.AWS_REGION)!, config.MAIL_FROM);
   return null;
 }
