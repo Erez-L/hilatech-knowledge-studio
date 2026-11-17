@@ -55,8 +55,8 @@ export interface ChatModelProvider {
  */
 export class EmbeddingInputTooLongError extends Error {
   readonly code = "embedding_failed" as const;
-  constructor(message: string, readonly source: "local_guard" | "provider") {
-    super(message);
+  constructor(message: string, readonly source: "local_guard" | "provider", options?: { cause?: unknown }) {
+    super(message, options);
     this.name = "EmbeddingInputTooLongError";
   }
 }

@@ -104,9 +104,9 @@ Open code issues that the run is expected to touch are listed in `docs/MILESTONE
 - **Two roles on one EC2 instance are not possible [Doc]:** an instance has one instance profile, and a profile holds one role. If both applications ever share the instance, the instance role should hold only `sts:AssumeRole` on two application roles, and each application assumes its own (`hilatech-saas-app`, `hilatech-knowledge-studio-app`) through the AWS SDK's `role_arn` + `credential_source = Ec2InstanceMetadata` profile. This separates permissions and audit trails, but not the applications from each other at the operating-system level: any process on the instance can reach the metadata service and assume either role. Real isolation needs separate instances or container task roles (ECS).
 - **The three code fixes named in section 7 are not implemented yet [Repo]:** the embeddings length guard still counts characters, the daily token budget is not checked before ingestion, and the S3 adapter does not map a 403 for a missing object. They are listed as open in `docs/MILESTONE_2_PLAN.md`.
 
-## 9. Approved setup plan (approved by the owner on 2026-11-15; NOT YET EXECUTED)
+## 9. Approved setup plan (approved by the owner on 2026-11-15; EXECUTED on 2026-11-17)
 
-Nothing in this section exists in AWS yet. It records the owner's decisions and the exact resources to create, so the setup can be carried out and checked step by step.
+The three resources below were created on 2026-11-17. What was created, where it differs from this plan, and the result of the first verification run are in `docs/VERIFICATION_RUN_2026-11-17.md`. The text below is the plan as approved and is kept unchanged.
 
 **Decisions.** Same account, Region us-east-1. Chat model: Claude Haiku 5.5, subject to verifying its exact Bedrock model ID, inference profile, availability and price in this account **[Unverified]**. Embeddings: `cohere.embed-multilingual-v3`, 1024 dimensions. Runtime identity for verification: **IAM Identity Center**, temporary credentials on the owner's machine through `aws sso login`. No access keys. The SaaS role, server and buckets are not touched. No EC2, RDS, ECS or ElastiCache.
 
