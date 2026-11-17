@@ -1,0 +1,87 @@
+# HilaTech Knowledge Studio on a single Docker host, next to another product.
+# Lives in /opt/knowledge-studio on the host, with .env beside it (see env.example).
+#
+# The host's ports 80 and 443 belong to the reverse proxy of the other product. This stack
+# publishes no port. Its web container joins that proxy's network under the alias
+# `knowledge-studio-web`, and the proxy routes the subdomain to it (see Caddyfile.snippet).
+name: knowledge-studio
+
+x-app: &app
+  image: ghcr.io/${IMAGE_REPOSITORY:?set IMAGE_REPOSITORY, lowercase owner/repo}/app:${IMAGE_TAG:?set IMAGE_TAG}
+  env_file: .env
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?}
+      HKS_OWNER_PASSWORD: ${HKS_OWNER_PASSWORD:?}
+      HKS_APP_PASSWORD: ${HKS_APP_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hks"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 128m
+
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["pnpm", "db:migrate"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  web:
+    <<: *app
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/demo').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      default:
+      edge:
+        aliases: [knowledge-studio-web]
+    mem_limit: 768m
+
+  worker:
+    <<: *app
+    command: ["pnpm", "--filter", "@hks/worker", "start"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    mem_limit: 640m
+
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:?set EDGE_NETWORK to the reverse proxy's Docker network}
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,16 @@
+# Add this site block to the Caddyfile of the reverse proxy that owns ports 80 and 443,
+# then reload it:  docker exec <proxy-container> caddy reload --config /etc/caddy/Caddyfile
+# `knowledge-studio-web` is the alias of the web container on the proxy's network.
+knowledge.hilatechdev.com {
+    encode zstd gzip
+    reverse_proxy knowledge-studio-web:3000 {
+        # Answers are streamed (server-sent events): do not buffer them.
+        flush_interval -1
+    }
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+}
