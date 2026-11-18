@@ -88,6 +88,19 @@ export type DocumentContent = {
   chunks: { id: string; index: number; pageNumber: number | null; pageEnd: number | null; sectionPath: string[] | null; text: string }[];
 };
 
+export type SummaryView = {
+  locale: "he" | "en";
+  createdAt: string;
+  pipelineMode: "live" | "sample";
+  content: {
+    overview: string;
+    /** Highlights are character offsets into the text of one chunk of the document. */
+    points: { text: string; highlights: { chunkId: string; start: number; end: number }[] }[];
+    rejectedQuotes: number;
+    rejectedPoints: number;
+  };
+};
+
 export type ChatEvent =
   | { type: "start"; conversationId: string; userMessageId: string; pipelineMode: "live" | "sample" }
   | { type: "text"; text: string }
@@ -132,6 +145,9 @@ export function createApi(scope: Scope) {
   retryDocument: (id: string) => send<{ queued: true }>(`${base}/documents/${id}/retry`, "POST", {}),
   documentContent: (id: string, page?: number, signal?: AbortSignal) =>
     get<DocumentContent>(`${base}/documents/${id}/content${page ? `?page=${page}` : ""}`, signal),
+  summary: (id: string, locale: "he" | "en", signal?: AbortSignal) =>
+    get<{ summary: SummaryView }>(`${base}/documents/${id}/summary?locale=${locale}`, signal).then((r) => r.summary),
+  summarize: (id: string, locale: "he" | "en") => send<{ summary: SummaryView }>(`${base}/documents/${id}/summary`, "POST", { locale }).then((r) => r.summary),
   conversations: (signal?: AbortSignal) =>
     scope === "demo"
       ? Promise.resolve([] as ConversationView[]) // the demo keeps no history list

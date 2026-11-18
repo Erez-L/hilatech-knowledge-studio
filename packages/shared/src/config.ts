@@ -26,6 +26,9 @@ const schema = z.object({
   LLM_MODEL_ID: z.string().optional(),
   LLM_MAX_OUTPUT_TOKENS: int(1024, 64),
   LLM_TIMEOUT_MS: int(60_000, 1000),
+  // Summarizing reads a whole document in one call; longer documents are refused, not cut.
+  SUMMARY_MAX_INPUT_TOKENS: int(60_000, 1000),
+  SUMMARY_MAX_OUTPUT_TOKENS: int(4000, 256),
   ANTHROPIC_API_KEY: z.string().optional(),
   AWS_REGION: z.string().optional(),
   BEDROCK_REGION: z.string().optional(),

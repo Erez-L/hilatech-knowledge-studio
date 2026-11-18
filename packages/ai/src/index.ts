@@ -11,4 +11,5 @@ export * from "./text/normalize.ts";
 export * from "./text/chunk.ts";
 export * from "./rag/prompt.ts";
 export * from "./rag/citations.ts";
+export * from "./rag/summary.ts";
 export * from "./extraction/render.ts";
