@@ -435,7 +435,8 @@
       },
       "dismiss": "Dismiss",
       "toastDeleted": "{title} was deleted.",
-      "toastRetry": "{title} was queued again."
+      "toastRetry": "{title} was queued again.",
+      "study": "Highlights and summary of {title}"
     },
     "demo": {
       "suggestionsTitle": "Try one of these questions",
@@ -478,6 +479,31 @@
       "legend": "Documents to answer from",
       "help": "Tick documents to answer only from them. With none ticked, the whole project is used.",
       "clear": "Whole project"
+    },
+    "study": {
+      "title": "Highlights and summary",
+      "back": "Back to the library",
+      "start": "Mark and summarize",
+      "again": "Summarize again",
+      "working": "Reading…",
+      "workingHint": "Reading the whole document. This can take up to a minute.",
+      "loading": "Loading the document…",
+      "missing": "This document isn't available.",
+      "summaryLabel": "Summary",
+      "textLabel": "Document text",
+      "sample": "Sample output from a test double, not AI.",
+      "empty": "Nothing is marked yet. Mark and summarize reads the whole document, highlights its key passages and writes a summary beside it.",
+      "note": "Each point rests on the highlighted text; choose a point to jump to it. Check the text itself before relying on a summary.",
+      "rejected": "{count, plural, one {# quote} other {# quotes}} could not be found in the text and were left out.",
+      "errors": {
+        "payload_too_large": "This document is too long to summarize in one pass.",
+        "provider_error": "The summary could not be matched to the document's text. Try again.",
+        "provider_not_configured": "Summarizing isn't configured.",
+        "budget_exceeded": "Today's AI usage budget doesn't cover this. It resets at midnight UTC.",
+        "rate_limited": "Too many summaries in a short time. Try again later.",
+        "not_found": "This document isn't available.",
+        "internal": "Something went wrong. Try again."
+      }
     }
   },
   "help": {

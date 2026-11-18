@@ -4,6 +4,7 @@ import {
   chunkEmbeddings,
   citations,
   documentChunks,
+  documentSummaries,
   documents,
   ingestionJobs,
   type DocumentStatus,
@@ -275,3 +276,41 @@ export async function finishDocumentDeletion(tx: Executor, ctx: TenantContext, d
     .returning({ storageKey: documents.storageKey });
   return deleted?.storageKey ?? null;
 }
+
+/* ---------------------------------------------------------------- summaries */
+
+export type DocumentSummaryRow = typeof documentSummaries.$inferSelect;
+
+export async function getDocumentSummary(tx: Executor, ctx: TenantContext, documentId: string, locale: "he" | "en") {
+  const [row] = await tx
+    .select()
+    .from(documentSummaries)
+    .where(
+      and(
+        eq(documentSummaries.organizationId, ctx.organizationId),
+        eq(documentSummaries.workspaceId, ctx.workspaceId),
+        eq(documentSummaries.documentId, documentId),
+        eq(documentSummaries.locale, locale),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Saves the summary for a document and language, replacing an earlier one. */
+export async function saveDocumentSummary(
+  tx: Executor,
+  ctx: TenantContext,
+  input: Pick<DocumentSummaryRow, "documentId" | "locale" | "provider" | "modelId" | "providerKind" | "content" | "createdByUserId">,
+) {
+  const [row] = await tx
+    .insert(documentSummaries)
+    .values({ ...input, organizationId: ctx.organizationId, workspaceId: ctx.workspaceId })
+    .onConflictDoUpdate({
+      target: [documentSummaries.documentId, documentSummaries.locale],
+      set: { provider: input.provider, modelId: input.modelId, providerKind: input.providerKind, content: input.content, createdByUserId: input.createdByUserId, createdAt: new Date() },
+    })
+    .returning();
+  return row!;
+}
+export type { StoredSummary } from "./schema.ts";

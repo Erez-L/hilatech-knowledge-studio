@@ -5,7 +5,7 @@ export const APP_URL = process.env.DATABASE_URL!;
 export const OWNER_URL = process.env.DATABASE_MIGRATION_URL!;
 
 const TABLES = [
-  "ai_budget_days", "audit_events", "contact_leads", "usage_events", "citations", "messages", "conversations",
+  "document_summaries", "ai_budget_days", "audit_events", "contact_leads", "usage_events", "citations", "messages", "conversations",
   "ingestion_jobs", "chunk_embeddings", "embedding_indexes", "document_chunks", "documents",
   "workspaces", "memberships", "sessions", "accounts", "verifications", "users", "organizations", "schema_migrations",
 ];

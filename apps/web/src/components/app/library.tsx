@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "@/i18n/navigation";
 import { Dialog } from "radix-ui";
-import { Check, CloudUpload, Eye, LoaderCircle, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, CloudUpload, Eye, Highlighter, LoaderCircle, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { ApiError, type DocumentView } from "@/lib/api";
@@ -24,6 +25,7 @@ const kindOf = (fileType: string) => (fileType === "pdf" || fileType === "docx" 
 const inProgress = (doc: DocumentView) => ["queued", "processing", "uploaded", "pending_upload"].includes(doc.status);
 
 export function Library() {
+  const router = useRouter();
   const t = useTranslations("app.library");
   const tw = useTranslations("workspace");
   const te = useTranslations("app.evidence");
@@ -339,6 +341,11 @@ export function Library() {
                             onClick={() => setPreview({ documentId: doc.id, title: doc.title, fileType: doc.fileType, page: doc.fileType === "pdf" ? 1 : null, chunkId: null })}
                           >
                             <Eye className="size-4.5" aria-hidden />
+                          </IconAction>
+                        )}
+                        {doc.status === "ready" && (
+                          <IconAction label={t("study", { title: doc.title })} onClick={() => router.push(`/app/library/${doc.id}`)}>
+                            <Highlighter className="size-4.5" aria-hidden />
                           </IconAction>
                         )}
                         {doc.status === "failed" && canUpload && (

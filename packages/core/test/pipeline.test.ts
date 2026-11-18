@@ -47,6 +47,8 @@ import {
   isPermanentFailure,
   LocalFileStorage,
   retryIngestion,
+  readSummary,
+  summarizeDocument,
   uploadDocument,
   type AnswerEvent,
   type IngestionJobData,
@@ -485,6 +487,69 @@ describe("projects and question scope", () => {
     await deleteDocument(services, withDocument, { kind: "user", userId: t.userId }, document.id, randomUUID());
     expect(await remove(extra!.id)).toBe("deleted");
     expect((await withTenant(database.db, t.organizationId, (tx) => listProjects(tx, t.organizationId))).length).toBe(1);
+  });
+});
+
+describe("document summary", () => {
+  const body = "The refund window for annual plans is thirty days from the purchase date. Requests after that are declined unless a team lead approves an exception in writing.";
+  /** A chat model that answers with a fixed reply, and records what it was asked. */
+  const scripted = (reply: (user: string) => string) => {
+    const seen: string[] = [];
+    const model: ChatModelProvider = {
+      descriptor: { provider: "scripted", modelId: "scripted-1", kind: "test_double" },
+      async *streamAnswer(request): AsyncIterable<ChatEvent> {
+        seen.push(request.user);
+        yield { type: "text", text: reply(request.user) };
+        yield { type: "done", inputTokens: 300, outputTokens: 80, stopReason: "end_turn" };
+      },
+    };
+    return { model, seen };
+  };
+  const good = () => JSON.stringify({
+    overview: "Refund rules.",
+    points: [
+      { text: "Thirty-day window.", quotes: [{ p: "P1", q: "refund window for annual plans is thirty days" }] },
+      { text: "Made up.", quotes: [{ p: "P1", q: "refunds are always granted without question" }] },
+    ],
+  });
+
+  it("saves a summary whose highlights point into the document's own text, and counts it as its own usage", async () => {
+    const t = await tenant("summary-ok");
+    const document = await upload(t, "refund-rules.txt", new TextEncoder().encode(body));
+    const { model, seen } = scripted(good);
+    const before = await used(t);
+    const summary = await summarizeDocument({ ...services, chat: model }, t, { documentId: document.id, locale: "en", userId: t.userId, correlationId: randomUUID() });
+    expect(seen[0]).toContain("thirty days from the purchase date"); // the whole document was sent, not a selection
+    expect(summary.content.points).toHaveLength(1);
+    expect(summary.content).toMatchObject({ rejectedQuotes: 1, rejectedPoints: 1 });
+    const chunks = await withTenant(database.db, t.organizationId, (tx) => listDocumentChunks(tx, t, document.id));
+    const highlight = summary.content.points[0]!.highlights[0]!;
+    expect(chunks.find((c) => c.id === highlight.chunkId)!.text.slice(highlight.start, highlight.end)).toBe("refund window for annual plans is thirty days");
+    expect((await used(t)).outputTokens - before.outputTokens).toBe(80);
+    const usage = await withTenant(database.db, t.organizationId, (tx) => usageSince(tx, t.organizationId, new Date(Date.now() - 60_000)));
+    expect(usage.questions).toBe(0); // a summary is not a question
+    expect((await readSummary(services, t, document.id, "en"))!.content.overview).toBe("Refund rules.");
+    expect(await readSummary(services, t, document.id, "he")).toBeNull();
+    expect(await readSummary(services, b, document.id, "en")).toBeNull(); // another organization
+    // Regenerating replaces it; deleting the document removes it.
+    await summarizeDocument({ ...services, chat: scripted(() => good().replace("Refund rules.", "Second version.")).model }, t, { documentId: document.id, locale: "en", userId: t.userId, correlationId: randomUUID() });
+    expect((await readSummary(services, t, document.id, "en"))!.content.overview).toBe("Second version.");
+    await deleteDocument(services, t, { kind: "user", userId: t.userId }, document.id, randomUUID());
+    expect(await readSummary(services, t, document.id, "en")).toBeNull();
+  });
+
+  it("refuses rather than saving when nothing can be verified, the document is too long, or it is not the caller's", async () => {
+    const t = await tenant("summary-refuse");
+    const document = await upload(t, "refund-rules.txt", new TextEncoder().encode(body));
+    const run = (custom: Services, ctx: TenantContext = t) => codeOf(summarizeDocument(custom, ctx, { documentId: document.id, locale: "en", userId: null, correlationId: randomUUID() }));
+    expect(await run({ ...services, chat: scripted(() => "Sorry, no.").model })).toBe("provider_error");
+    expect(await run({ ...services, chat: scripted(() => JSON.stringify({ overview: "x", points: [{ text: "y", quotes: [{ p: "P1", q: "words that are nowhere in the text" }] }] })).model })).toBe("provider_error");
+    expect(await readSummary(services, t, document.id, "en")).toBeNull();
+    const never = scripted(good);
+    expect(await run({ ...withConfig({ SUMMARY_MAX_INPUT_TOKENS: "1000" }), chat: never.model })).toBe("payload_too_large");
+    expect(await run({ ...services, chat: never.model }, b)).toBe("not_found");
+    expect(await run({ ...services, chat: null })).toBe("provider_not_configured");
+    expect(never.seen).toHaveLength(0);
   });
 });
 

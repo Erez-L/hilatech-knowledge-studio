@@ -281,13 +281,35 @@ export const aiBudgetDays = pgTable(
   (t) => [primaryKey({ columns: [t.organizationId, t.day] })],
 );
 
+/** What a saved summary holds. Highlights are character offsets into a chunk's text. */
+export type StoredSummary = {
+  overview: string;
+  points: { text: string; highlights: { chunkId: string; start: number; end: number }[] }[];
+  rejectedQuotes: number;
+  rejectedPoints: number;
+};
+
+export const documentSummaries = pgTable("document_summaries", {
+  id: id(),
+  organizationId: uuid("organization_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
+  documentId: uuid("document_id").notNull(),
+  locale: text("locale").$type<"he" | "en">().notNull(),
+  provider: text("provider").notNull(),
+  modelId: text("model_id").notNull(),
+  providerKind: text("provider_kind").$type<"live" | "test_double">().notNull(),
+  content: jsonb("content").$type<StoredSummary>().notNull(),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: createdAt(),
+});
+
 export const usageEvents = pgTable("usage_events", {
   id: id(),
   organizationId: uuid("organization_id").notNull(),
   workspaceId: uuid("workspace_id"),
   userId: uuid("user_id"),
   demoSessionId: text("demo_session_id"),
-  kind: text("kind").$type<"chat_completion" | "query_embedding" | "document_embedding" | "document_ocr">().notNull(),
+  kind: text("kind").$type<"chat_completion" | "query_embedding" | "document_embedding" | "document_ocr" | "document_summary">().notNull(),
   provider: text("provider").notNull(),
   modelId: text("model_id").notNull(),
   providerKind: text("provider_kind").$type<"live" | "test_double">().notNull(),
