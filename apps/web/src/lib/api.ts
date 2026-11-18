@@ -141,6 +141,7 @@ export function createApi(scope: Scope) {
   createProject: (name: string) => send<{ project: ProjectView }>(`${base}/projects`, "POST", { name }).then((r) => r.project),
   renameProject: (id: string, name: string) => send<{ project: { id: string; name: string } }>(`${base}/projects/${id}`, "PATCH", { name }),
   deleteProject: (id: string) => send<{ deleted: true }>(`${base}/projects/${id}`, "DELETE"),
+  moveDocument: (id: string, projectId: string) => send<{ moved: true }>(`${base}/documents/${id}/move`, "POST", { projectId }),
   deleteDocument: (id: string) => send<{ deleted: true }>(`${base}/documents/${id}`, "DELETE"),
   retryDocument: (id: string) => send<{ queued: true }>(`${base}/documents/${id}/retry`, "POST", {}),
   documentContent: (id: string, page?: number, signal?: AbortSignal) =>

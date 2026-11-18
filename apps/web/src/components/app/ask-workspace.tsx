@@ -15,6 +15,7 @@ import { ChatComposer } from "@/components/workspace/chat-composer";
 import { useApp } from "./app-provider";
 import { OpenNavigationButton } from "./app-shell";
 import { MarkdownAnswer } from "./markdown-answer";
+import { GuideSteps } from "./guide-steps";
 import { QuestionScope } from "./question-scope";
 import { SourceViewer, useLocation, type ViewerTarget } from "./source-viewer";
 
@@ -390,6 +391,7 @@ function EmptyState({
           {demo ? t("demo.emptyTitle") : noDocuments ? t("empty.noDocsTitle") : t("empty.title")}
         </h1>
         <p className="type-lead mt-3 max-w-[36rem]">{demo ? t("demo.emptyBody") : noDocuments ? t("empty.noDocsBody") : t("empty.body")}</p>
+        {!demo ? <GuideSteps compact className="mt-8" /> : null}
 
         {!loaded ? (
           <div className="mt-10 flex flex-col gap-3" aria-hidden>

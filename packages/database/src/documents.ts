@@ -314,3 +314,39 @@ export async function saveDocumentSummary(
   return row!;
 }
 export type { StoredSummary } from "./schema.ts";
+
+/* ------------------------------------------------------------ move to project */
+
+/**
+ * Moves a ready document, with its passages, vectors and summaries, to another project of the
+ * same organization. Everything changes in one transaction, so the document is never
+ * searchable in two projects or in none. Conversations stay where they were held: an earlier
+ * answer keeps its wording, and its citation to this document no longer opens from the old project.
+ */
+export async function moveDocument(
+  tx: Executor,
+  ctx: TenantContext,
+  documentId: string,
+  targetWorkspaceId: string,
+): Promise<"moved" | "not_found" | "not_ready" | "same_project" | "duplicate"> {
+  const document = await getDocument(tx, ctx, documentId);
+  if (!document) return "not_found";
+  if (targetWorkspaceId === ctx.workspaceId) return "same_project";
+  if (document.status !== "ready") return "not_ready";
+  if (document.contentSha256) {
+    const [twin] = await tx
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.organizationId, ctx.organizationId), eq(documents.workspaceId, targetWorkspaceId), eq(documents.contentSha256, document.contentSha256)))
+      .limit(1);
+    if (twin) return "duplicate";
+  }
+  const org = ctx.organizationId;
+  for (const table of ["documents", "document_chunks", "chunk_embeddings", "document_summaries"] as const) {
+    const key = table === "documents" ? sql`id` : sql`document_id`;
+    await tx.execute(
+      sql`update ${sql.identifier(table)} set workspace_id = ${targetWorkspaceId}::uuid where organization_id = ${org}::uuid and ${key} = ${documentId}::uuid`,
+    );
+  }
+  return "moved";
+}

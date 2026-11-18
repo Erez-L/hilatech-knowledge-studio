@@ -1,8 +1,9 @@
 "use client";
 
+import { GuideSteps } from "./guide-steps";
 import { useRouter } from "@/i18n/navigation";
 import { Dialog } from "radix-ui";
-import { Check, CloudUpload, Eye, Highlighter, LoaderCircle, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, CloudUpload, Eye, FolderInput, Highlighter, LoaderCircle, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { ApiError, type DocumentView } from "@/lib/api";
@@ -26,11 +27,13 @@ const inProgress = (doc: DocumentView) => ["queued", "processing", "uploaded", "
 
 export function Library() {
   const router = useRouter();
+  const [moving, setMoving] = useState<string | null>(null);
   const t = useTranslations("app.library");
   const tw = useTranslations("workspace");
   const te = useTranslations("app.evidence");
   const locale = useLocale();
-  const { api, me, handleAuthError } = useApp();
+  const { api, me, handleAuthError, projects, refreshProjects } = useApp();
+  const otherProjects = (projects ?? []).filter((project) => project.id !== me?.project.id);
 
   const [documents, setDocuments] = useState<DocumentView[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -136,6 +139,18 @@ export function Library() {
     }
   };
 
+  const move = async (doc: DocumentView, projectId: string) => {
+    setMoving(null);
+    try {
+      await api.moveDocument(doc.id, projectId);
+      setToast(t("toastMoved", { title: doc.title, project: otherProjects.find((p) => p.id === projectId)?.name ?? "" }));
+      void load(search);
+      void refreshProjects();
+    } catch (error) {
+      if (!handleAuthError(error)) setToast(error instanceof ApiError && error.code === "duplicate_document" ? t("moveDuplicate") : t("moveFailed"));
+    }
+  };
+
   const retry = async (doc: DocumentView) => {
     try {
       await api.retryDocument(doc.id);
@@ -177,6 +192,8 @@ export function Library() {
         <div className="mx-auto w-full max-w-[68rem] px-4 py-8 sm:px-8 sm:py-10">
           <h1 className="text-app-title leading-(--leading-heading) font-extrabold tracking-(--tracking-heading)">{t("title")}</h1>
           <p className="mt-2 max-w-[44rem] text-secondary">{t("body")}</p>
+
+          {me?.organization.kind !== "demo" && documents !== null && documents.length === 0 && !search ? <GuideSteps className="mt-8" /> : null}
 
           {/* Upload */}
           {me && !canUpload ? (
@@ -352,6 +369,30 @@ export function Library() {
                           <IconAction label={`${t("retry")}: ${doc.title}`} onClick={() => void retry(doc)}>
                             <RotateCcw className="size-4.5 rtl:-scale-x-100" aria-hidden />
                           </IconAction>
+                        )}
+                        {doc.status === "ready" && canUpload && otherProjects.length > 0 && (
+                          <span className="relative">
+                            <IconAction label={t("move", { title: doc.title })} onClick={() => setMoving(moving === doc.id ? null : doc.id)}>
+                              <FolderInput className="size-4.5" aria-hidden />
+                            </IconAction>
+                            {moving === doc.id && (
+                              <span role="menu" aria-label={t("moveTo")} className="absolute end-0 top-full z-20 mt-1 flex w-60 flex-col gap-0.5 rounded-control border border-border-strong bg-surface p-1.5 shadow-raised">
+                                <span className="px-2 py-1 text-label font-semibold text-tertiary">{t("moveTo")}</span>
+                                {otherProjects.map((project) => (
+                                  <button
+                                    key={project.id}
+                                    type="button"
+                                    role="menuitem"
+                                    dir="auto"
+                                    onClick={() => void move(doc, project.id)}
+                                    className="min-h-9 truncate rounded-control px-2 text-start text-small hover:bg-hover"
+                                  >
+                                    {project.name}
+                                  </button>
+                                ))}
+                              </span>
+                            )}
+                          </span>
                         )}
                         {canDelete(doc) && (
                           <IconAction label={`${t("delete")}: ${doc.title}`} onClick={() => setConfirm(doc)} danger>

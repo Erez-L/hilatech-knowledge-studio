@@ -43,33 +43,34 @@ Language for the overview and the points: ${input.language === "he" ? "Hebrew" :
   return { system: SYSTEM, user, maxOutputTokens: input.maxOutputTokens };
 }
 
-/** Whitespace of any kind and length compares as one space; nothing else is forgiven. */
-function squeeze(text: string): { squeezed: string; origin: number[] } {
-  let squeezed = "";
+/**
+ * Reduces text to its words: letters and digits only, in order, with the position of each kept
+ * character. Punctuation, brackets, quote marks, Hebrew points and spacing are dropped, because
+ * a model copying a sentence routinely alters those. The words themselves are never forgiven:
+ * one different letter and the quote does not match.
+ */
+function wordsOnly(text: string): { letters: string; origin: number[] } {
+  let letters = "";
   const origin: number[] = [];
-  let pendingSpace = false;
   for (let i = 0; i < text.length; i++) {
-    if (/\s/.test(text[i]!)) {
-      pendingSpace = squeezed.length > 0;
-      continue;
+    const char = text[i]!;
+    if (/[\p{L}\p{N}]/u.test(char)) {
+      letters += char.toLowerCase();
+      origin.push(i);
     }
-    if (pendingSpace) {
-      squeezed += " ";
-      origin.push(i - 1);
-      pendingSpace = false;
-    }
-    squeezed += text[i];
-    origin.push(i);
   }
-  return { squeezed, origin };
+  return { letters, origin };
 }
 
-/** Finds a quote in a passage, ignoring only differences in whitespace. Returns offsets into `text`. */
+/**
+ * Finds a quote in a passage by its words. Returns offsets into `text` that span from the first
+ * to the last matched letter, so the highlight shows the passage's own punctuation.
+ */
 export function locateQuote(text: string, quote: string): { start: number; end: number } | null {
-  const needle = squeeze(quote).squeezed;
+  const needle = wordsOnly(quote).letters;
   if (needle.length < 8) return null;
-  const { squeezed, origin } = squeeze(text);
-  const at = squeezed.indexOf(needle);
+  const { letters, origin } = wordsOnly(text);
+  const at = letters.indexOf(needle);
   if (at === -1) return null;
   return { start: origin[at]!, end: origin[at + needle.length - 1]! + 1 };
 }
