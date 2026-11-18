@@ -53,6 +53,8 @@ export type AskInput = {
   locale: Locale;
   correlationId: string;
   signal?: AbortSignal;
+  /** Answer only from these documents of the workspace. Absent or empty: the whole workspace. */
+  documentIds?: string[];
 };
 
 const MAX_QUESTION_CHARS = 2000;
@@ -143,7 +145,7 @@ async function* answerWithinBudget(
         ...usageBase, kind: "query_embedding", provider: embeddings.descriptor.provider,
         modelId: embeddings.descriptor.modelId, providerKind: embeddings.descriptor.kind, units: 1,
       });
-      return searchChunks(tx, ctx, { embeddingIndexId: index.id, queryVector, topK: config.RAG_TOP_K });
+      return searchChunks(tx, ctx, { embeddingIndexId: index.id, queryVector, topK: config.RAG_TOP_K, documentIds: input.documentIds });
     });
   } catch (error) {
     log("error", "answer.retrieval_failed", { correlationId: input.correlationId, code: isAppError(error) ? error.code : "internal" });

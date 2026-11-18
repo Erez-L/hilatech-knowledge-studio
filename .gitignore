@@ -15,3 +15,6 @@ playwright-report
 # Written by test and evaluation runs
 artifacts/evaluation
 artifacts/live-verification
+
+# Local Redis started by hand for the test suite
+dump.rdb

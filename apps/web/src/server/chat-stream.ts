@@ -8,6 +8,8 @@ export const chatRequestSchema = z.object({
   question: z.string().trim().min(1).max(2000),
   conversationId: z.uuid().optional(),
   locale: z.enum(["he", "en"]),
+  // Narrow the question to chosen documents of the active project.
+  documentIds: z.array(z.uuid()).max(50).optional(),
 });
 
 export async function assertDailyQuestionLimit(services: Services, ctx: TenantContext, limit: number) {

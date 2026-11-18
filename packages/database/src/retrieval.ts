@@ -31,12 +31,17 @@ export const EXACT_SEARCH_MAX_ROWS = 20_000;
 export async function searchChunks(
   tx: Executor,
   ctx: TenantContext,
-  input: { embeddingIndexId: string; queryVector: number[]; topK: number },
+  input: { embeddingIndexId: string; queryVector: number[]; topK: number; documentIds?: string[] },
 ): Promise<RetrievedChunk[]> {
+  // Optional narrowing to chosen documents. Ids are applied inside the tenant and workspace
+  // filter, so an id from elsewhere simply matches nothing.
+  const scope = input.documentIds?.length
+    ? sql` and e.chunk_id in (select id from document_chunks where document_id in (${sql.join(input.documentIds.map((id) => sql`${id}::uuid`), sql`, `)}))`
+    : sql``;
   const vector = `[${input.queryVector.join(",")}]`;
   const tenant = sql`e.organization_id = ${ctx.organizationId}::uuid
     and e.workspace_id = ${ctx.workspaceId}::uuid
-    and e.embedding_index_id = ${input.embeddingIndexId}::uuid`;
+    and e.embedding_index_id = ${input.embeddingIndexId}::uuid${scope}`;
 
   const counted = await tx.execute<{ n: string }>(
     sql`select count(*)::text as n from (select 1 from chunk_embeddings e where ${tenant} limit ${EXACT_SEARCH_MAX_ROWS + 1}) s`,

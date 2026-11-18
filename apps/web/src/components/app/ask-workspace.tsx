@@ -15,6 +15,7 @@ import { ChatComposer } from "@/components/workspace/chat-composer";
 import { useApp } from "./app-provider";
 import { OpenNavigationButton } from "./app-shell";
 import { MarkdownAnswer } from "./markdown-answer";
+import { QuestionScope } from "./question-scope";
 import { SourceViewer, useLocation, type ViewerTarget } from "./source-viewer";
 
 type UiMessage =
@@ -75,6 +76,8 @@ export function AskWorkspace() {
   const [loading, setLoading] = useState(Boolean(requested));
   const [evidence, setEvidence] = useState<Evidence>(closedEvidence);
   const [documents, setDocuments] = useState<DocumentView[] | null>(null);
+  // Documents the next question is limited to; empty means the whole project.
+  const [scopeIds, setScopeIds] = useState<string[]>([]);
   const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -149,7 +152,10 @@ export function AskWorkspace() {
     ]);
 
     try {
-      for await (const event of api.ask({ question, conversationId: conversationId ?? undefined, locale }, controller.signal)) {
+      for await (const event of api.ask(
+        { question, conversationId: conversationId ?? undefined, locale, documentIds: scopeIds.length ? scopeIds.slice(0, 50) : undefined },
+        controller.signal,
+      )) {
         if (event.type === "start") {
           patch(answerId, () => ({ pipelineMode: event.pipelineMode }));
           if (!conversationId) {
@@ -291,6 +297,7 @@ export function AskWorkspace() {
         </div>
 
         <div className="shrink-0 px-4 pt-2 pb-4 sm:px-8 md:pb-3">
+          {scope === "app" && documents ? <QuestionScope documents={documents} selected={scopeIds} onChange={setScopeIds} disabled={busy} /> : null}
           <ChatComposer
             busy={busy}
             onSend={send}

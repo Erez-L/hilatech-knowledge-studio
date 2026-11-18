@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
 import type { Db, Executor } from "./client.ts";
 import { withTenant, type TenantContext } from "./client.ts";
-import { memberships, organizations, users, workspaces } from "./schema.ts";
+import { documents, memberships, organizations, users, workspaces } from "./schema.ts";
 
 export type Role = "owner" | "admin" | "member";
 export type MembershipView = {
@@ -156,4 +157,84 @@ export async function ensureDemoOrganization(db: Db): Promise<TenantContext> {
     return created!;
   });
   return { organizationId, workspaceId: workspace.id };
+}
+
+/* ---------------------------------------------------------------- projects */
+
+/**
+ * A project is a workspace: its own documents, index and conversations. Questions are answered
+ * from one project, so unrelated subjects kept in separate projects never mix in an answer.
+ */
+export type ProjectView = { id: string; name: string; slug: string; createdAt: Date; documentCount: number; isDefault: boolean };
+
+export const MAX_PROJECTS_PER_ORGANIZATION = 50;
+
+/** The organization's projects, oldest first. The oldest one is the default. */
+export async function listProjects(tx: Executor, organizationId: string): Promise<ProjectView[]> {
+  const rows = await tx
+    .select({
+      w: workspaces,
+      // The outer column is written out in full: an unqualified "id" here would bind to documents.id.
+      documentCount: sql<string>`(select count(*) from documents d where d.workspace_id = "workspaces"."id")`,
+    })
+    .from(workspaces)
+    .where(eq(workspaces.organizationId, organizationId))
+    .orderBy(workspaces.createdAt);
+  return rows.map(({ w, documentCount }, index) => ({
+    id: w.id, name: w.name, slug: w.slug, createdAt: w.createdAt, documentCount: Number(documentCount), isDefault: index === 0,
+  }));
+}
+
+export async function getProject(tx: Executor, organizationId: string, projectId: string) {
+  const [row] = await tx
+    .select()
+    .from(workspaces)
+    .where(and(eq(workspaces.organizationId, organizationId), eq(workspaces.id, projectId)))
+    .limit(1);
+  return row ?? null;
+}
+
+const cleanProjectName = (name: string) => name.replace(/[\u0000-\u001F\u007F]/g, "").replace(/\s+/g, " ").trim().slice(0, 120);
+
+/** Returns null when the organization already has the maximum number of projects. */
+export async function createProject(tx: Executor, organizationId: string, name: string) {
+  const clean = cleanProjectName(name);
+  if (!clean) return null;
+  const [{ n } = { n: "0" }] = await tx
+    .select({ n: sql<string>`count(*)` })
+    .from(workspaces)
+    .where(eq(workspaces.organizationId, organizationId));
+  if (Number(n) >= MAX_PROJECTS_PER_ORGANIZATION) return null;
+  // The slug only has to be unique and well-formed; names may be in any script.
+  const slug = `p-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  const [created] = await tx.insert(workspaces).values({ organizationId, name: clean, slug }).returning();
+  return created ?? null;
+}
+
+export async function renameProject(tx: Executor, organizationId: string, projectId: string, name: string) {
+  const clean = cleanProjectName(name);
+  if (!clean) return null;
+  const [updated] = await tx
+    .update(workspaces)
+    .set({ name: clean, updatedAt: new Date() })
+    .where(and(eq(workspaces.organizationId, organizationId), eq(workspaces.id, projectId)))
+    .returning();
+  return updated ?? null;
+}
+
+/**
+ * Deletes a project only when it holds no documents: stored files are removed by the document
+ * deletion path, and deleting rows underneath it would orphan them. The default project stays.
+ */
+export async function deleteEmptyProject(tx: Executor, organizationId: string, projectId: string): Promise<"deleted" | "not_found" | "not_empty" | "is_default"> {
+  const projects = await listProjects(tx, organizationId);
+  const project = projects.find((p) => p.id === projectId);
+  if (!project) return "not_found";
+  if (project.isDefault) return "is_default";
+  // Counted again on its own, in this transaction: deleting a project that still has documents
+  // would cascade over their rows and leave their stored files behind.
+  const [{ n } = { n: "1" }] = await tx.select({ n: sql<string>`count(*)` }).from(documents).where(eq(documents.workspaceId, projectId));
+  if (project.documentCount > 0 || Number(n) > 0) return "not_empty";
+  await tx.delete(workspaces).where(and(eq(workspaces.organizationId, organizationId), eq(workspaces.id, projectId)));
+  return "deleted";
 }

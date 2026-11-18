@@ -13,6 +13,7 @@ import { ThemeSwitcher } from "@/components/shared/theme-switcher";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useApp } from "./app-provider";
+import { ProjectSwitcher } from "./project-switcher";
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const t = useTranslations("app.nav");
@@ -51,6 +52,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <Logo />
         </Link>
       </div>
+
+      <ProjectSwitcher />
 
       <nav aria-label={t("label")} className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-col gap-1 px-4 pb-3">
