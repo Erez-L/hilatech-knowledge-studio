@@ -11,12 +11,14 @@ export const GET = route(async ({ request, requestId }) => {
     {
       user: ctx.user,
       organization: ctx.organization,
+      project: ctx.project,
       role: ctx.role,
       organizations: ctx.memberships.map((m) => ({ id: m.organizationId, name: m.organizationName, role: m.role })),
       capabilities: {
         upload: can(ctx, "documents.upload"),
         deleteAnyDocument: can(ctx, "documents.delete_any"),
         manageMembers: can(ctx, "members.manage"),
+        manageProjects: can(ctx, "projects.manage"),
       },
       pipeline: {
         // "sample": deterministic test doubles are active. "unconfigured": no provider is set.

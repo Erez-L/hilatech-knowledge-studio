@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "@/i18n/navigation";
-import { ApiError, createApi, type Api, type ConversationView, type Me, type Scope } from "@/lib/api";
+import { ApiError, createApi, storeProjectId, type Api, type ConversationView, type Me, type ProjectView, type Scope } from "@/lib/api";
 
 type AppState = {
   /** "app": signed-in application. "demo": public, read-only demo tenant. */
@@ -15,6 +15,11 @@ type AppState = {
   conversations: ConversationView[] | null;
   refreshConversations: () => Promise<void>;
   removeConversation: (id: string) => Promise<void>;
+  /** The organization's projects; null while loading, empty in the demo. */
+  projects: ProjectView[] | null;
+  refreshProjects: () => Promise<void>;
+  /** Makes a project the active one and reloads the application in it. */
+  switchProject: (id: string) => void;
   /** Sends the browser to sign-in when the server says the session has ended. */
   handleAuthError: (error: unknown) => boolean;
 };
@@ -33,6 +38,7 @@ export function AppProvider({ children, scope = "app" }: { children: ReactNode; 
   const homePath = scope === "demo" ? "/demo" : "/app";
   const [me, setMe] = useState<Me | null>(null);
   const [conversations, setConversations] = useState<ConversationView[] | null>(null);
+  const [projects, setProjects] = useState<ProjectView[] | null>(null);
 
   const handleAuthError = useCallback(
     (error: unknown) => {
@@ -65,6 +71,24 @@ export function AppProvider({ children, scope = "app" }: { children: ReactNode; 
     }
   }, [api, handleAuthError]);
 
+  const refreshProjects = useCallback(async () => {
+    try {
+      setProjects(await api.projects());
+    } catch (error) {
+      if (!handleAuthError(error)) setProjects((current) => current ?? []);
+    }
+  }, [api, handleAuthError]);
+
+  const switchProject = useCallback(
+    (id: string) => {
+      storeProjectId(id);
+      // A full load: every list, conversation and open document belongs to the previous project.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign(`${window.location.pathname.split("/").slice(0, 2).join("/")}${homePath}`);
+    },
+    [homePath],
+  );
+
   const removeConversation = useCallback(
     async (id: string) => {
       await api.deleteConversation(id);
@@ -84,12 +108,16 @@ export function AppProvider({ children, scope = "app" }: { children: ReactNode; 
     // Initial load: state is set after the request resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshConversations();
+    void refreshProjects();
     return () => controller.abort();
-  }, [api, handleAuthError, refreshConversations]);
+  }, [api, handleAuthError, refreshConversations, refreshProjects]);
 
   const value = useMemo(
-    () => ({ scope, api, homePath: homePath as "/app" | "/demo", me, conversations, refreshConversations, removeConversation, handleAuthError }),
-    [scope, api, homePath, me, conversations, refreshConversations, removeConversation, handleAuthError],
+    () => ({
+      scope, api, homePath: homePath as "/app" | "/demo", me, conversations, refreshConversations, removeConversation,
+      projects, refreshProjects, switchProject, handleAuthError,
+    }),
+    [scope, api, homePath, me, conversations, refreshConversations, removeConversation, projects, refreshProjects, switchProject, handleAuthError],
   );
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

@@ -453,6 +453,31 @@
       "usage": "{limit} questions per demo session",
       "emptyTitle": "Ask the Northstar documents",
       "emptyBody": "Northstar Business Services is a fictional company. Ask about its twelve sample documents, in English or Hebrew, and every answer shows the passages it is based on."
+    },
+    "projects": {
+      "label": "Project",
+      "documentCount": "{count, plural, =0 {empty} one {# document} other {# documents}}",
+      "newPlaceholder": "New project name",
+      "create": "Create project",
+      "rename": "Rename {name}",
+      "renameLabel": "Project name",
+      "save": "Save",
+      "delete": "Delete the empty project {name}",
+      "hint": "Each project has its own documents and conversations. A question is answered from the active project only.",
+      "errors": {
+        "conflict": "That can't be done: the project still has documents, or the limit of projects was reached.",
+        "validation": "Enter a name of up to 120 characters.",
+        "forbidden": "Your role doesn't allow managing projects.",
+        "rate_limited": "Too many new projects. Try again later.",
+        "internal": "Something went wrong. Try again."
+      }
+    },
+    "scope": {
+      "all": "Whole project · {total} documents",
+      "some": "{count} of {total} documents",
+      "legend": "Documents to answer from",
+      "help": "Tick documents to answer only from them. With none ticked, the whole project is used.",
+      "clear": "Whole project"
     }
   },
   "help": {

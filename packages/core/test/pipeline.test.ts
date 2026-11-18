@@ -19,6 +19,10 @@ import {
   budgetUsed,
   createDatabase,
   createOrganizationWithOwner,
+  createProject,
+  deleteEmptyProject,
+  listProjects,
+  renameProject,
   reserveBudget,
   settleBudget,
   createUser,
@@ -106,7 +110,7 @@ async function upload(ctx: TenantContext & { userId: string }, filename: string,
   return waitFor(ctx, doc.id);
 }
 
-async function ask(ctx: TenantContext & { userId: string }, question: string, overrides: Partial<Services> = {}, extra: { signal?: AbortSignal; conversationId?: string } = {}) {
+async function ask(ctx: TenantContext & { userId: string }, question: string, overrides: Partial<Services> = {}, extra: { signal?: AbortSignal; conversationId?: string; documentIds?: string[] } = {}) {
   const events: AnswerEvent[] = [];
   for await (const event of answerQuestion({ ...services, ...overrides }, ctx, { userId: ctx.userId }, { question, locale: "en", correlationId: randomUUID(), ...extra })) {
     events.push(event);
@@ -427,6 +431,62 @@ async function ingestInline(custom: Services, ctx: TenantContext & { userId: str
 const hebrewSentence = "לקוחות בתוכנית Growth זכאים להחזר מלא בתוך 30 יום ממועד הרכישה, בכפוף לאישור של ראש הצוות. ";
 const withConfig = (overrides: Record<string, string>): Services => ({ ...services, config: parseConfig({ ...baseEnv, ...overrides }) });
 const used = (ctx: TenantContext) => withTenant(database.db, ctx.organizationId, (tx) => budgetUsed(tx, ctx.organizationId));
+
+describe("projects and question scope", () => {
+  const text = (subject: string) => new TextEncoder().encode(`${subject}. The refund window for annual plans is thirty days from the purchase date. ${subject} applies it without exceptions.`);
+
+  it("answers only from the chosen documents, and an unknown id matches nothing", async () => {
+    const t = await tenant("scope-docs");
+    const first = await upload(t, "alpha-policy.txt", text("Alpha policy"));
+    const second = await upload(t, "beta-policy.txt", text("Beta policy"));
+    expect([first.status, second.status]).toEqual(["ready", "ready"]);
+    const question = "What is the refund window for annual plans?";
+
+    const whole = await ask(t, question);
+    expect(new Set(whole.done!.sources.map((s) => s.documentId))).toEqual(new Set([first.id, second.id]));
+    const onlyFirst = await ask(t, question, {}, { documentIds: [first.id] });
+    expect(onlyFirst.done!.sources.map((s) => s.documentId)).toEqual([first.id]);
+    const onlySecond = await ask(t, question, {}, { documentIds: [second.id] });
+    expect(onlySecond.done!.sources.map((s) => s.documentId)).toEqual([second.id]);
+    // A document of another organization cannot be reached by naming its id.
+    const foreign = await upload(a, "gamma-policy.txt", text("Gamma policy"));
+    const none = await ask(t, question, {}, { documentIds: [foreign.id, randomUUID()] });
+    expect(none.done).toMatchObject({ answerStatus: "insufficient_evidence", sources: [] });
+  });
+
+  it("keeps each project's documents out of the other project's answers", async () => {
+    const t = await tenant("scope-projects");
+    const halacha = await withTenant(database.db, t.organizationId, (tx) => createProject(tx, t.organizationId, "  הלכות   מעשר  "));
+    expect(halacha).toMatchObject({ name: "הלכות מעשר" });
+    const inHalacha = { ...t, workspaceId: halacha!.id };
+    const document = await upload(inHalacha, "delta-policy.txt", text("Delta policy"));
+    expect(document.status).toBe("ready");
+    const question = "What is the refund window for annual plans?";
+
+    expect((await ask(t, question)).done).toMatchObject({ answerStatus: "insufficient_evidence", sources: [] });
+    expect((await ask(inHalacha, question)).done!.sources.map((s) => s.documentId)).toEqual([document.id]);
+
+    const projects = await withTenant(database.db, t.organizationId, (tx) => listProjects(tx, t.organizationId));
+    expect(projects.map((p) => [p.isDefault, p.documentCount])).toEqual([[true, 0], [false, 1]]);
+    // Another organization sees none of them and cannot rename them.
+    expect(await withTenant(database.db, b.organizationId, (tx) => listProjects(tx, t.organizationId))).toEqual([]);
+    expect(await withTenant(database.db, b.organizationId, (tx) => renameProject(tx, t.organizationId, halacha!.id, "x"))).toBeNull();
+  });
+
+  it("deletes only an empty project that is not the first one", async () => {
+    const t = await tenant("scope-delete");
+    const remove = (id: string) => withTenant(database.db, t.organizationId, (tx) => deleteEmptyProject(tx, t.organizationId, id));
+    const extra = await withTenant(database.db, t.organizationId, (tx) => createProject(tx, t.organizationId, "Scratch"));
+    const withDocument = { ...t, workspaceId: extra!.id };
+    const document = await upload(withDocument, "epsilon.txt", text("Epsilon policy"));
+    expect(await remove(t.workspaceId)).toBe("is_default");
+    expect(await remove(extra!.id)).toBe("not_empty");
+    expect(await remove(randomUUID())).toBe("not_found");
+    await deleteDocument(services, withDocument, { kind: "user", userId: t.userId }, document.id, randomUUID());
+    expect(await remove(extra!.id)).toBe("deleted");
+    expect((await withTenant(database.db, t.organizationId, (tx) => listProjects(tx, t.organizationId))).length).toBe(1);
+  });
+});
 
 describe("scanned PDFs with a page reader", () => {
   const scannedPdf = () => readFile(path.join(here, "..", "..", "ai", "test", "fixtures", "scanned-no-text-layer.pdf"));
