@@ -2,6 +2,7 @@ export * from "./providers/types.ts";
 export * from "./providers/deterministic.ts";
 export * from "./providers/anthropic.ts";
 export * from "./providers/bedrock.ts";
+export * from "./providers/tesseract.ts";
 export * from "./providers/factory.ts";
 export * from "./extraction/types.ts";
 export * from "./extraction/detect.ts";

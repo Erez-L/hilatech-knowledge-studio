@@ -2,6 +2,7 @@ import { AppError, type Config } from "@hks/shared";
 import { AnthropicChatModel } from "./anthropic.ts";
 import { BedrockChatModel, BedrockCohereEmbeddings, BedrockPageReader } from "./bedrock.ts";
 import { DeterministicChatModel, DeterministicEmbeddings, DeterministicPageReader } from "./deterministic.ts";
+import { TesseractPageReader } from "./tesseract.ts";
 import type { ChatModelProvider, EmbeddingsProvider, PageTextReader } from "./types.ts";
 
 /**
@@ -49,6 +50,8 @@ export function createPageReader(config: Config): PageTextReader | null {
       return null;
     case "deterministic":
       return new DeterministicPageReader();
+    case "tesseract":
+      return new TesseractPageReader({ languages: config.OCR_LANGUAGES });
     case "bedrock":
       return new BedrockPageReader({
         region: region(config),

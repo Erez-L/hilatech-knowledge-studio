@@ -52,7 +52,10 @@ const schema = z.object({
 
   // Scanned PDF pages (no text layer) are read by a vision model when this is set. "none" keeps
   // them unsupported. Every page read is a paid model call, so the page count is capped.
-  OCR_PROVIDER: z.enum(["bedrock", "deterministic", "none"]).default("none"),
+  // "tesseract" runs the local OCR engine: free, no network, and it cannot invent text.
+  OCR_PROVIDER: z.enum(["tesseract", "bedrock", "deterministic", "none"]).default("none"),
+  // Tesseract language packs, joined with "+". They must be installed in the image.
+  OCR_LANGUAGES: z.string().regex(/^[a-z_]+(\+[a-z_]+)*$/i).default("heb+eng"),
   // Falls back to LLM_MODEL_ID. The model must accept image input.
   OCR_MODEL_ID: z.string().optional(),
   OCR_MAX_PAGES: int(20, 1),

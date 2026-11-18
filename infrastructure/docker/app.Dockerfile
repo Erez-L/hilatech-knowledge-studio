@@ -13,6 +13,11 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     CI=true
 
+# Tesseract reads scanned PDF pages (OCR_PROVIDER=tesseract). English comes with the engine.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-heb \
+ && rm -rf /var/lib/apt/lists/*
+
 RUN npm install -g pnpm@10.28.0 && npm cache clean --force
 
 WORKDIR /app

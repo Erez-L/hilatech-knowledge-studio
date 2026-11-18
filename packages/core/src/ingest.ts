@@ -156,6 +156,7 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
       reader
         ? {
             maxPages: config.OCR_MAX_PAGES,
+            renderScale: reader.renderScale,
             // One paid model call per scanned page. Budget is reserved before each call and
             // settled with what the provider reports, so a long scan stops when the budget does.
             readPage: async (png) => {
