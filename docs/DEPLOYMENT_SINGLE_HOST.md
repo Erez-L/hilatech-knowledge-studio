@@ -86,3 +86,17 @@ Text read from a scan can contain mistakes, and accuracy on dense layouts or unu
 
 The release that introduces this includes migration `0004_usage_document_ocr.sql`; `deploy.sh`
 runs migrations before starting the new containers.
+
+### Which reader
+
+`OCR_PROVIDER=tesseract` is the one to use. On 2026-11-17 the same printed Hebrew page (a study
+sheet whose PDF text layer is unreadable) was read three ways on the server:
+
+| Reader | Result | Cost | Time |
+|---|---|---|---|
+| Claude Haiku 4.5, whole page | most words wrong, though it looked like Hebrew | about 1 cent | about 20 s |
+| Claude Haiku 4.5, page cut into four bands | structure right, many words wrong, repeated lines | about 1.5 cents | about 1 min |
+| Tesseract 5.3, `heb`, 300 dpi | nearly word for word | none | 6 s |
+
+One page is not a benchmark. Rashi script and pages with several columns of different texts were
+not measured. The vision-model reader stays in the code, off, for a stronger model later.

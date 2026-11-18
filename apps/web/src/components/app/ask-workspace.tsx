@@ -276,8 +276,10 @@ export function AskWorkspace() {
                 <li key={message.id}>
                   {message.role === "user" ? (
                     <div className="flex justify-end">
+                      {/* The label sits outside the paragraph: inside it, its language would decide the
+                          direction of the whole question and misplace punctuation in the other language. */}
+                      <span className="sr-only">{tw("you")}: </span>
                       <p dir="auto" className="max-w-[85%] rounded-panel rounded-ee-sm bg-bubble px-4 py-3 text-[0.9375rem] leading-normal font-medium whitespace-pre-wrap text-on-bubble [overflow-wrap:anywhere]">
-                        <span className="sr-only">{tw("you")}: </span>
                         {message.content}
                       </p>
                     </div>

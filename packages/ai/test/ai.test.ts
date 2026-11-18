@@ -8,6 +8,8 @@ import {
   BedrockChatModel,
   BedrockCohereEmbeddings,
   BedrockPageReader,
+  TesseractPageReader,
+  renderPdfPage,
   DeterministicPageReader,
   PAGE_READING_INSTRUCTIONS,
   buildGroundedRequest,
@@ -569,5 +571,39 @@ describe("page reader (scanned pages)", () => {
     expect(parseConfig({ APP_ENV: "test" }).OCR_PROVIDER).toBe("none");
     expect(() => parseConfig({ APP_ENV: "production", OCR_PROVIDER: "deterministic" })).toThrow();
     expect(() => parseConfig({ APP_ENV: "test", OCR_PROVIDER: "bedrock" })).toThrow(); // no model, no region
+  });
+});
+
+/**
+ * Runs the real Tesseract engine when it is installed with Hebrew (it is in the application
+ * image and in CI images that add it); otherwise these are skipped, not faked.
+ */
+const tesseractReady = await new TesseractPageReader({ languages: "heb+eng" }).readPage(await renderPdfPage(await fixture("scanned-no-text-layer.pdf"), 1, 1)).then(() => true, () => false);
+
+describe.skipIf(!tesseractReady)("Tesseract page reader (real engine)", () => {
+  const hePdf = () => readFile(path.join(here, "..", "..", "..", "samples", "northstar", "he", "refund-and-cancellation-policy.pdf"));
+  const words = (text: string) => new Set(text.match(/[א-ת]{3,}/g) ?? []);
+
+  it("reads a printed Hebrew page nearly word for word", async () => {
+    const reader = new TesseractPageReader({ languages: "heb+eng" });
+    const pdf = await hePdf();
+    const expected = words((await extractDocument(pdf, "pdf")).blocks.find((b) => b.pageNumber === 1)!.text);
+    const reading = await reader.readPage(await renderPdfPage(pdf, 1, reader.renderScale));
+    const read = words(reading.text);
+    const found = [...expected].filter((word) => read.has(word)).length;
+    expect(expected.size).toBeGreaterThan(40);
+    expect(found / expected.size).toBeGreaterThan(0.9);
+    expect(reading).toMatchObject({ truncated: false, inputTokens: 0, outputTokens: 0 });
+  }, 60_000);
+
+  it("turns a failing engine into a stable error and refuses odd language names", async () => {
+    expect(await codeOf(new TesseractPageReader({ languages: "heb", command: "false" }).readPage(new Uint8Array([1])))).toBe("extraction_failed");
+    expect(await codeOf(new TesseractPageReader({ languages: "heb", command: "/nonexistent/tesseract" }).readPage(new Uint8Array([1])))).toBe("extraction_failed");
+    expect(() => new TesseractPageReader({ languages: "heb; rm -rf /" })).toThrow();
+  });
+
+  it("is selected by configuration", () => {
+    expect(parseConfig({ APP_ENV: "test", OCR_PROVIDER: "tesseract" }).OCR_LANGUAGES).toBe("heb+eng");
+    expect(() => parseConfig({ APP_ENV: "test", OCR_PROVIDER: "tesseract", OCR_LANGUAGES: "heb eng" })).toThrow();
   });
 });

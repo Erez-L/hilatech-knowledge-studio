@@ -69,7 +69,7 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?:
       throw new AppError("too_many_pages", `The PDF has ${empty.length} scanned pages; up to ${scanned.maxPages} can be read`);
     }
     for (const pageNumber of empty) {
-      const png = await renderPdfPage(bytes, pageNumber, SCANNED_PAGE_RENDER_SCALE);
+      const png = await renderPdfPage(bytes, pageNumber, scanned.renderScale ?? SCANNED_PAGE_RENDER_SCALE);
       const text = (await scanned.readPage(png, pageNumber)).trim();
       // Whatever the text layer held is dropped either way: it was empty or unreadable.
       pages[pageNumber - 1] = text;

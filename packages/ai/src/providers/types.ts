@@ -65,6 +65,8 @@ export interface PageTextReader {
   readonly maxOutputTokensPerPage: number;
   /** Rough input tokens for one page image plus instructions; used to reserve budget. */
   readonly estimatedInputTokensPerPage: number;
+  /** Scale to render a PDF page at before reading it (1 = 72 dpi). Default: the extractor's own. */
+  readonly renderScale?: number;
   readPage(png: Uint8Array, signal?: AbortSignal): Promise<PageReading>;
 }
 

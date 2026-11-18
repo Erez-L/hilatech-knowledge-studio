@@ -21,6 +21,8 @@ export type ExtractedDocument = {
  */
 export type ScannedPageReading = {
   maxPages: number;
+  /** Scale to render each page at (1 = 72 dpi). */
+  renderScale?: number;
   readPage(png: Uint8Array, pageNumber: number): Promise<string>;
 };
 
