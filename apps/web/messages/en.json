@@ -304,7 +304,8 @@
         "member": "Member"
       },
       "deleteConversation": "Delete conversation {title}",
-      "untitled": "Untitled conversation"
+      "untitled": "Untitled conversation",
+      "guide": "Guide"
     },
     "mode": {
       "sampleBadge": "Test double",
@@ -436,7 +437,12 @@
       "dismiss": "Dismiss",
       "toastDeleted": "{title} was deleted.",
       "toastRetry": "{title} was queued again.",
-      "study": "Highlights and summary of {title}"
+      "study": "Highlights and summary of {title}",
+      "move": "Move {title} to another project",
+      "moveTo": "Move to project",
+      "toastMoved": "Moved {title} to {project}.",
+      "moveDuplicate": "That project already has this file.",
+      "moveFailed": "The document could not be moved. Try again."
     },
     "demo": {
       "suggestionsTitle": "Try one of these questions",
@@ -503,6 +509,30 @@
         "rate_limited": "Too many summaries in a short time. Try again later.",
         "not_found": "This document isn't available.",
         "internal": "Something went wrong. Try again."
+      }
+    },
+    "guide": {
+      "title": "How to work here",
+      "more": "Full guide",
+      "project": {
+        "title": "Choose a project",
+        "body": "Keep each subject in its own project. Questions never mix projects."
+      },
+      "upload": {
+        "title": "Add documents",
+        "body": "PDF, Word, text or Markdown. A document is used once it shows Ready."
+      },
+      "ask": {
+        "title": "Ask",
+        "body": "In Hebrew or English. Limit a question to chosen documents when you need to."
+      },
+      "check": {
+        "title": "Check the sources",
+        "body": "Every answer cites the passages it rests on. Open them and read."
+      },
+      "summarize": {
+        "title": "Mark and summarize",
+        "body": "The marker icon in the library highlights a document's key passages and summarizes it."
       }
     }
   },

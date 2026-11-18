@@ -1,6 +1,6 @@
 "use client";
 
-import { LibraryBig, LogOut, Menu, MessageSquareText, MessagesSquare, Plus, Trash2 } from "lucide-react";
+import { CircleHelp, LibraryBig, LogOut, Menu, MessageSquareText, MessagesSquare, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
@@ -59,6 +59,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex flex-col gap-1 px-4 pb-3">
           {navItem("/app", t("workspace"), MessagesSquare, onAsk)}
           {navItem("/app/library", t("library"), LibraryBig, pathname.startsWith("/app/library"))}
+          <Link
+            href="/help"
+            onClick={onNavigate}
+            className="flex min-h-11 items-center gap-3 rounded-control px-3 text-small font-semibold text-secondary transition-colors hover:bg-hover hover:text-foreground"
+          >
+            <CircleHelp className="size-4.5 shrink-0" aria-hidden />
+            {t("guide")}
+          </Link>
         </div>
 
         <div className="flex items-center justify-between px-6 pt-3 pb-1.5">

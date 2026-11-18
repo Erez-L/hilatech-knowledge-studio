@@ -54,7 +54,7 @@ export default async function LocaleLayout({
       suppressHydrationWarning
     >
       <body>
-        <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange={false}>
+        <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem={false} storageKey="hks-theme-choice" disableTransitionOnChange={false}>
           <NextIntlClientProvider>{children}</NextIntlClientProvider>
         </ThemeProvider>
       </body>

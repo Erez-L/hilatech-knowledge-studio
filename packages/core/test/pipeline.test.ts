@@ -22,6 +22,7 @@ import {
   createProject,
   deleteEmptyProject,
   listProjects,
+  moveDocument,
   renameProject,
   reserveBudget,
   settleBudget,
@@ -473,6 +474,27 @@ describe("projects and question scope", () => {
     // Another organization sees none of them and cannot rename them.
     expect(await withTenant(database.db, b.organizationId, (tx) => listProjects(tx, t.organizationId))).toEqual([]);
     expect(await withTenant(database.db, b.organizationId, (tx) => renameProject(tx, t.organizationId, halacha!.id, "x"))).toBeNull();
+  });
+
+  it("moves a document with its index and summary to another project, in one step", async () => {
+    const t = await tenant("scope-move");
+    const news = await withTenant(database.db, t.organizationId, (tx) => createProject(tx, t.organizationId, "News"));
+    const inNews = { ...t, workspaceId: news!.id };
+    const document = await upload(t, "zeta-policy.txt", text("Zeta policy"));
+    const question = "What is the refund window for annual plans?";
+    const move = (ctx: TenantContext, id: string, to: string) => withTenant(database.db, ctx.organizationId, (tx) => moveDocument(tx, ctx, id, to));
+
+    expect(await move(t, document.id, t.workspaceId)).toBe("same_project");
+    expect(await move(b, document.id, news!.id)).toBe("not_found"); // another organization cannot move it
+    expect(await move(t, document.id, news!.id)).toBe("moved");
+    expect((await ask(t, question)).done).toMatchObject({ answerStatus: "insufficient_evidence", sources: [] });
+    expect((await ask(inNews, question)).done!.sources.map((s) => s.documentId)).toEqual([document.id]);
+    expect(await withTenant(database.db, t.organizationId, (tx) => getDocument(tx, t, document.id))).toBeNull();
+    expect((await withTenant(database.db, t.organizationId, (tx) => listDocumentChunks(tx, inNews, document.id))).length).toBeGreaterThan(0);
+    // The same file uploaded again to the first project cannot then be moved on top of its twin.
+    const twin = await upload(t, "zeta-policy.txt", text("Zeta policy"));
+    expect(twin.status).toBe("ready");
+    expect(await move(t, twin.id, news!.id)).toBe("duplicate");
   });
 
   it("deletes only an empty project that is not the first one", async () => {
