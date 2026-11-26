@@ -1,5 +1,6 @@
-import { getDocument, recordAudit, withTenant } from "@hks/database";
+import { recordAudit, withTenant } from "@hks/database";
 import { AppError } from "@hks/shared";
+import { findReadableDocument } from "@/server/cited-document";
 import { requireContext } from "@/server/context";
 import { route, uuidParam } from "@/server/http";
 import { getServices } from "@/server/services";
@@ -14,17 +15,15 @@ export const GET = route<{ id: string }>(async ({ request, params, requestId }) 
   const ctx = await requireContext(request);
   const id = uuidParam(params.id);
   const { db, storage } = getServices();
-  const doc = await withTenant(db, ctx.tenant.organizationId, async (tx) => {
-    const found = await getDocument(tx, ctx.tenant, id);
-    if (found && found.status !== "deleting") {
-      await recordAudit(tx, {
-        organizationId: ctx.tenant.organizationId, actorUserId: ctx.user.id, actorKind: "user",
-        action: "document.downloaded", targetType: "document", targetId: id, outcome: "success", correlationId: requestId,
-      });
-    }
-    return found;
-  });
-  if (!doc || doc.status === "deleting") throw new AppError("not_found");
+  // Also a document moved to another project of the organization, so old citations keep opening.
+  const doc = (await findReadableDocument(ctx, id))?.document;
+  if (!doc) throw new AppError("not_found");
+  await withTenant(db, ctx.tenant.organizationId, (tx) =>
+    recordAudit(tx, {
+      organizationId: ctx.tenant.organizationId, actorUserId: ctx.user.id, actorKind: "user",
+      action: "document.downloaded", targetType: "document", targetId: id, outcome: "success", correlationId: requestId,
+    }),
+  );
   const bytes = await storage.get(doc.storageKey);
 
   // Only PDFs are shown inline (in a sandboxed frame); everything else downloads.

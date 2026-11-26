@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Download, FileX2, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileX2, FolderInput, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import type { DocumentContent, SourceView } from "@/lib/api";
@@ -195,6 +195,13 @@ function DocumentView({
         </a>
         )}
       </div>
+
+      {state.data?.movedTo ? (
+        <p role="note" className="flex items-start gap-2 border border-b-0 border-border bg-sunken px-3 py-2 text-label text-secondary">
+          <FolderInput className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span dir="auto">{t("movedNote", { project: state.data.movedTo.name })}</span>
+        </p>
+      ) : null}
 
       {isPdf && (
         <div className="flex items-center justify-between gap-2 border border-border bg-sunken px-1.5 py-1">
