@@ -14,6 +14,12 @@ export type MembershipView = {
   workspaceName: string;
 };
 
+/** Every organization id, oldest first. Organizations are not tenant rows (no row level security). */
+export async function listOrganizationIds(db: Db): Promise<string[]> {
+  const rows = await db.select({ id: organizations.id }).from(organizations).orderBy(organizations.createdAt, organizations.id);
+  return rows.map((row) => row.id);
+}
+
 /** Creates an organization, its default workspace and the owner membership. */
 export async function createOrganizationWithOwner(
   db: Db,

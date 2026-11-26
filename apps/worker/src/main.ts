@@ -2,7 +2,7 @@
 import { createChatModel, createEmbeddingsProvider, createPageReader } from "@hks/ai";
 import os from "node:os";
 import path from "node:path";
-import { createIngestionWorker, createRedis, createStorage, startHeartbeat } from "@hks/core";
+import { BullJobQueue, createIngestionWorker, createRedis, createStorage, startHeartbeat, startStuckDocumentSweep } from "@hks/core";
 import { createDatabase } from "@hks/database";
 import { getConfig, log } from "@hks/shared";
 
@@ -22,7 +22,13 @@ const worker = createIngestionWorker(
   { config, db: database.db, storage: createStorage(config), embeddings, chat: createChatModel(config), pageReader: createPageReader(config) },
   config.REDIS_URL,
 );
-log("info", "worker.started", { embeddings: embeddings.descriptor.provider, kind: embeddings.descriptor.kind, scannedPages: config.OCR_PROVIDER });
+log("info", "worker.started", {
+  embeddings: embeddings.descriptor.provider, kind: embeddings.descriptor.kind, scannedPages: config.OCR_PROVIDER, concurrency: config.WORKER_CONCURRENCY,
+});
+
+// Documents left queued or processing with no job behind them are marked failed, so they can be retried.
+const sweepQueue = new BullJobQueue(config.REDIS_URL);
+const stopSweep = startStuckDocumentSweep({ config, db: database.db }, sweepQueue);
 
 // Alive means: the queue consumer is running and Redis answers. The probe has a connection of
 // its own, because the queue library keeps its connection to itself.
@@ -35,8 +41,10 @@ const heartbeat = startHeartbeat({
 
 const shutdown = async () => {
   heartbeat.stop();
+  stopSweep();
   probe.disconnect();
   await worker.close();
+  await sweepQueue.close();
   await database.close();
   process.exit(0);
 };
