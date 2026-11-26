@@ -26,7 +26,7 @@ Three database roles, each given only to what needs it:
 | `hks_owner` (owns the tables) | the one-shot `migrate` job | `migrate.env` as `DATABASE_MIGRATION_URL`; its password also in `postgres.env` as `HKS_OWNER_PASSWORD` |
 | `hks_app` (subject to row level security) | `ks-web` and `ks-worker` | `.env` as `DATABASE_URL`; its password also in `postgres.env` as `HKS_APP_PASSWORD` |
 
-`.env` is the environment of the web and worker containers, so it must hold neither the superuser password nor the owner URL. Row level security is forced on the tenant tables (migration 0006), so even the owner role sees a tenant's rows only after setting `app.organization_id`, as the application does; the superuser bypasses it, which backups rely on.
+`.env` is the environment of the web and worker containers, so it must hold neither the superuser password nor the owner URL. Row level security is forced on the tenant tables (migration 0006), so even the owner role sees a tenant's rows only after setting `app.organization_id`, as the application does; the superuser bypasses it, which backups rely on. The audit trail (`audit_events`) is the exception: the owner role can still read all of it.
 
 `docker-compose.prod.yml` reads `postgres.env` and `migrate.env` when they exist, so a host that still keeps these values in `.env` keeps working. To move them on an existing host (a server change, not done by a deploy):
 
