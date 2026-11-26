@@ -7,7 +7,9 @@ export type MailMessage = {
   subject: string;
   text: string;
   /** What the message is for; safe to log. */
-  kind: "verify_email" | "reset_password";
+  kind: "verify_email" | "reset_password" | "lead_notification";
+  /** Where a reply should go, when that is not the sender address. */
+  replyTo?: string;
 };
 
 export interface Mailer {
@@ -36,7 +38,7 @@ export class SmtpMailer implements Mailer {
   async send(message: MailMessage) {
     this.transport ??= (await import("nodemailer")).default.createTransport(this.url);
     try {
-      await this.transport.sendMail({ from: this.from, to: message.to, subject: message.subject, text: message.text });
+      await this.transport.sendMail({ from: this.from, to: message.to, subject: message.subject, text: message.text, replyTo: message.replyTo });
       log("info", "mail.sent", { kind: message.kind });
     } catch (error) {
       log("error", "mail.failed", { kind: message.kind, name: (error as Error).name });
@@ -46,7 +48,7 @@ export class SmtpMailer implements Mailer {
 }
 
 /** The one SES call the mailer needs; lets tests replace the AWS client. */
-export type SesSend = (input: { from: string; to: string; subject: string; text: string }) => Promise<void>;
+export type SesSend = (input: { from: string; to: string; subject: string; text: string; replyTo?: string }) => Promise<void>;
 
 /**
  * Amazon SES through the AWS SDK. Credentials come from the default provider
@@ -63,11 +65,12 @@ export class SesMailer implements Mailer {
     if (this.sendWith) return this.sendWith;
     const { SESv2Client, SendEmailCommand } = await import("@aws-sdk/client-sesv2");
     const client = new SESv2Client({ region: this.region });
-    this.sendWith = async ({ from, to, subject, text }) => {
+    this.sendWith = async ({ from, to, subject, text, replyTo }) => {
       await client.send(
         new SendEmailCommand({
           FromEmailAddress: from,
           Destination: { ToAddresses: [to] },
+          ReplyToAddresses: replyTo ? [replyTo] : undefined,
           Content: {
             Simple: {
               Subject: { Data: subject, Charset: "UTF-8" },
@@ -82,7 +85,7 @@ export class SesMailer implements Mailer {
   async send(message: MailMessage) {
     try {
       const send = await this.client();
-      await send({ from: this.from, to: message.to, subject: message.subject, text: message.text });
+      await send({ from: this.from, to: message.to, subject: message.subject, text: message.text, ...(message.replyTo ? { replyTo: message.replyTo } : {}) });
       log("info", "mail.sent", { kind: message.kind, transport: "ses" });
     } catch (error) {
       log("error", "mail.failed", { kind: message.kind, transport: "ses", name: (error as Error).name });

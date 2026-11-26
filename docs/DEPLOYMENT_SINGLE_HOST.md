@@ -72,6 +72,19 @@ MAIL_FROM="HilaTech Knowledge Studio <no-reply@hilatechdev.com>"
 `AUTH_SIGNUP_ENABLED` stays `false` until the owner decides to open sign-up. While
 SES is in the sandbox, opening sign-up only works for verified recipient addresses.
 
+### Contact-form notifications
+
+Every request from the contact form is saved in the `contact_leads` table. With
+`LEADS_NOTIFY_EMAIL=<address>` in `/opt/knowledge-studio/.env`, each request is also mailed to
+that address through the same transport, with the sender's address as Reply-To. The address
+lives in `.env` only; it is not in the repository. Two conditions:
+
+- `MAIL_TRANSPORT` must not be `none`. With no transport the request is still saved and the
+  log shows `lead.notification_not_configured`.
+- While SES is in the sandbox, the notification address itself has to be a verified identity
+  in SES, or SES refuses the message. The request is still saved, the visitor still sees
+  success, and the log shows `lead.notification_failed`.
+
 ## Scanned PDF pages (OCR)
 
 With `OCR_PROVIDER=bedrock`, a PDF page that has no text layer is rendered to an image in the

@@ -4,6 +4,7 @@ export * from "./ingest.ts";
 export * from "./answer.ts";
 export * from "./queue.ts";
 export * from "./mail.ts";
+export * from "./lead-notification.ts";
 export * from "./rate-limit.ts";
 export * from "./budget.ts";
 export * from "./registration.ts";
