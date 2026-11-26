@@ -29,6 +29,8 @@ export interface EmbeddingsProvider {
   embedDocuments(texts: string[], signal?: AbortSignal): Promise<number[][]>;
   /** Embeds a question for retrieval (models may treat queries differently from passages). */
   embedQuery(text: string, signal?: AbortSignal): Promise<number[]>;
+  /** Embeds several questions in one request when the provider supports it. Order matches input. */
+  embedQueries?(texts: string[], signal?: AbortSignal): Promise<number[][]>;
 }
 
 export type ChatRequest = {

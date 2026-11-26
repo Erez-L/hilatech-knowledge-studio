@@ -1,10 +1,24 @@
-import { buildGroundedRequest, CitationStreamFilter, estimateTokens, pipelineModeOf, type PromptSource } from "@hks/ai";
+import {
+  buildGroundedRequest,
+  CitationStreamFilter,
+  estimateTokens,
+  HISTORY_QUERY_MAX_CHARS,
+  historyForPrompt,
+  historyQuery,
+  mergeRetrieval,
+  pairTurns,
+  pipelineModeOf,
+  type EmbeddingsProvider,
+  type HistoryTurn,
+  type PromptSource,
+} from "@hks/ai";
 import {
   addAssistantMessage,
   addUserMessage,
   createConversation,
   ensureActiveEmbeddingIndex,
   getConversation,
+  listRecentMessages,
   recordUsage,
   searchChunks,
   withTenant,
@@ -59,6 +73,8 @@ export type AskInput = {
 
 const MAX_QUESTION_CHARS = 2000;
 const EXCERPT_CHARS = 900;
+/** Characters of one earlier turn as the model sees it, at most (see historyForPrompt). */
+const HISTORY_TURN_CHARS = 1200;
 
 /**
  * Answers a question from the caller's workspace documents.
@@ -86,8 +102,14 @@ export async function* answerQuestion(
   // is replaced by actual usage when the answer ends, however it ends.
   const questionTokens = estimateTokens(input.question.slice(0, MAX_QUESTION_CHARS));
   const contextTokens = Math.ceil((config.RAG_MAX_CONTEXT_CHUNKS * config.CHUNK_MAX_CHARS) / 3) + 600;
+  // A follow-up also embeds a second query with the earlier questions, and sends a short
+  // transcript of the earlier turns to the model. Reserved at its upper bound; settled to actual use.
+  const historyTokens = input.conversationId && config.RAG_HISTORY_TURNS > 0
+    ? Math.ceil(HISTORY_QUERY_MAX_CHARS / 2) + Math.ceil((config.RAG_HISTORY_TURNS * HISTORY_TURN_CHARS) / 2)
+    : 0;
   const reservation = await reserveAiBudget(
-    services, ctx.organizationId, { inputTokens: questionTokens * 2 + contextTokens, outputTokens: config.LLM_MAX_OUTPUT_TOKENS }, "another question",
+    services, ctx.organizationId,
+    { inputTokens: questionTokens * 2 + historyTokens + contextTokens, outputTokens: config.LLM_MAX_OUTPUT_TOKENS }, "another question",
   );
   const spend: Spend = { inputTokens: 0, outputTokens: 0 };
   try {
@@ -95,6 +117,18 @@ export async function* answerQuestion(
   } finally {
     await settleAiBudget(services, reservation, spend);
   }
+}
+
+/** Embeds the question (and the follow-up context query) in one request when the provider can. */
+async function embedQuestions(embeddings: EmbeddingsProvider, texts: string[], signal?: AbortSignal): Promise<number[][]> {
+  if (texts.length > 1 && embeddings.embedQueries) {
+    const vectors = await embeddings.embedQueries(texts, signal);
+    if (vectors.length !== texts.length) throw new AppError("embedding_failed", "Unexpected number of query embeddings");
+    return vectors;
+  }
+  const vectors: number[][] = [];
+  for (const text of texts) vectors.push(await embeddings.embedQuery(text, signal));
+  return vectors;
 }
 
 /** Tokens to charge for one question; updated as the answer progresses. */
@@ -124,28 +158,41 @@ async function* answerWithinBudget(
     correlationId: input.correlationId,
   };
 
-  // 1. Conversation and the user's message.
-  const { conversationId, userMessageId } = await withTenant(db, ctx.organizationId, async (tx) => {
+  // 1. Conversation, its last turns (for a follow-up question) and the user's message.
+  const { conversationId, userMessageId, history } = await withTenant(db, ctx.organizationId, async (tx) => {
     const conversation = input.conversationId
       ? await getConversation(tx, ctx, owner, input.conversationId)
       : await createConversation(tx, ctx, owner, { title: question.slice(0, 80), locale: input.locale });
     if (!conversation) throw new AppError("not_found", "Conversation not found");
+    const turns = config.RAG_HISTORY_TURNS;
+    const earlier: HistoryTurn[] = input.conversationId && turns > 0
+      ? pairTurns(await listRecentMessages(tx, ctx, conversation.id, turns * 2 + 2), turns)
+      : [];
     const message = await addUserMessage(tx, ctx, { conversationId: conversation.id, content: question, correlationId: input.correlationId });
-    return { conversationId: conversation.id, userMessageId: message.id };
+    return { conversationId: conversation.id, userMessageId: message.id, history: earlier };
   });
   yield { type: "start", conversationId, userMessageId, pipelineMode };
 
-  // 2. Retrieval, scoped to this workspace.
+  // 2. Retrieval, scoped to this workspace. A follow-up question runs a second query that also
+  // carries the earlier questions, so "and the second one?" still finds the passages it is about.
   let candidates: RetrievedChunk[];
+  const contextQuery = historyQuery(question, history);
+  const queryTokens = budget.question + (contextQuery ? estimateTokens(contextQuery) : 0);
   try {
-    spend.inputTokens = budget.question; // the query embedding
-    const queryVector = await embeddings.embedQuery(question, input.signal);
+    // The query embedding(s), in one request when the provider supports it.
+    spend.inputTokens = queryTokens;
+    const [queryVector, contextVector] = await embedQuestions(embeddings, contextQuery ? [question, contextQuery] : [question], input.signal);
     candidates = await withTenant(db, ctx.organizationId, async (tx) => {
       await recordUsage(tx, {
         ...usageBase, kind: "query_embedding", provider: embeddings.descriptor.provider,
-        modelId: embeddings.descriptor.modelId, providerKind: embeddings.descriptor.kind, units: 1,
+        modelId: embeddings.descriptor.modelId, providerKind: embeddings.descriptor.kind, units: contextVector ? 2 : 1,
       });
-      return searchChunks(tx, ctx, { embeddingIndexId: index.id, queryVector, topK: config.RAG_TOP_K, documentIds: input.documentIds });
+      const search = { embeddingIndexId: index.id, topK: config.RAG_TOP_K, documentIds: input.documentIds };
+      const primary = await searchChunks(tx, ctx, { ...search, queryVector: queryVector! });
+      if (!contextVector) return primary;
+      // A question that finds good evidence by itself keeps its own passages first (a new subject).
+      const standsAlone = (primary[0]?.similarity ?? -1) >= config.RAG_EVIDENCE_MIN_SIMILARITY;
+      return mergeRetrieval(primary, await searchChunks(tx, ctx, { ...search, queryVector: contextVector }), config.RAG_TOP_K, standsAlone);
     });
   } catch (error) {
     log("error", "answer.retrieval_failed", { correlationId: input.correlationId, code: isAppError(error) ? error.code : "internal" });
@@ -155,7 +202,7 @@ async function* answerWithinBudget(
 
   // 3. Evidence selection: relevance floor, then a context budget.
   const relevant = candidates.filter((c) => c.similarity >= config.RAG_MIN_SIMILARITY);
-  const hasEvidence = relevant.length > 0 && relevant[0]!.similarity >= config.RAG_EVIDENCE_MIN_SIMILARITY;
+  const hasEvidence = relevant.some((c) => c.similarity >= config.RAG_EVIDENCE_MIN_SIMILARITY);
   const selected = hasEvidence ? relevant.slice(0, config.RAG_MAX_CONTEXT_CHUNKS) : [];
   const byLabel = new Map<string, RetrievedChunk>(selected.map((chunk, i) => [`S${i + 1}`, chunk]));
   const labelOf = new Map<string, string>([...byLabel].map(([label, chunk]) => [chunk.chunkId, label]));
@@ -217,7 +264,7 @@ async function* answerWithinBudget(
     location: chunk.pageNumber ? `page ${chunk.pageNumber}` : chunk.sectionPath?.length ? `section ${chunk.sectionPath.join(" > ")}` : null,
     text: chunk.text,
   }));
-  const request = buildGroundedRequest({ question, sources, maxOutputTokens: config.LLM_MAX_OUTPUT_TOKENS });
+  const request = buildGroundedRequest({ question, sources, maxOutputTokens: config.LLM_MAX_OUTPUT_TOKENS, history: historyForPrompt(history) });
   const filter = new CitationStreamFilter(new Set(byLabel.keys()));
   const announced = new Set<string>();
   let inputTokens: number | null = null;
@@ -248,7 +295,7 @@ async function* answerWithinBudget(
         inputTokens = event.inputTokens;
         outputTokens = event.outputTokens;
         if (event.inputTokens !== null && event.outputTokens !== null) {
-          spend.inputTokens = budget.question + event.inputTokens;
+          spend.inputTokens = queryTokens + event.inputTokens;
           spend.outputTokens = event.outputTokens;
         }
         // A reply that was cut off, refused or filtered is not a complete answer, even though the request succeeded.

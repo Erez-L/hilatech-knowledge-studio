@@ -46,6 +46,9 @@ const schema = z.object({
   CHUNK_OVERLAP_CHARS: int(200, 0),
   RAG_TOP_K: int(12, 1),
   RAG_MAX_CONTEXT_CHUNKS: int(6, 1),
+  // Earlier question/answer pairs of a conversation used to understand a follow-up question
+  // (a second search query and a short transcript for the model; no extra model call). 0 turns it off.
+  RAG_HISTORY_TURNS: int(3, 0).pipe(z.number().max(5)),
   // Placeholders until calibrated against the real embedding model.
   RAG_MIN_SIMILARITY: z.coerce.number().min(-1).max(1).default(0.3),
   RAG_EVIDENCE_MIN_SIMILARITY: z.coerce.number().min(-1).max(1).default(0.4),

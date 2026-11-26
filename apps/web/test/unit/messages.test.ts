@@ -31,9 +31,17 @@ describe("interface text", () => {
     expect([...en.keys()].filter((key) => names(en.get(key)!) !== names(he.get(key) ?? ""))).toEqual([]);
   });
 
-  it("does not describe the product as unfinished or promise follow-up questions", () => {
-    const stale = [/in development/i, /being built/i, /not a finished service/i, /not connected yet/i, /follow[- ]up/i, /new accounts are not open on this/i, /בפיתוח/, /נמצאות בבנייה/, /לא שירות מוגמר/, /שאלות המשך/, /שאלת המשך/, /באתר ההדגמה הזה לא נפתחים/];
+  it("does not describe the product as unfinished", () => {
+    const stale = [/in development/i, /being built/i, /not a finished service/i, /not connected yet/i, /new accounts are not open on this/i, /בפיתוח/, /נמצאות בבנייה/, /לא שירות מוגמר/, /באתר ההדגמה הזה לא נפתחים/];
     const text = [...en.values(), ...he.values()];
     expect(stale.filter((pattern) => text.some((value) => pattern.test(value))).map(String)).toEqual([]);
+  });
+
+  it("no longer says that each question is answered on its own, now that follow-up questions work", () => {
+    const stale = [/answered on its own/i, /write (it|every question) in full/i, /נענית בפני עצמה/, /לנסח (אותה|כל שאלה) במלואה/];
+    const text = [...en.values(), ...he.values()];
+    expect(stale.filter((pattern) => text.some((value) => pattern.test(value))).map(String)).toEqual([]);
+    expect(text.some((value) => /follow-up/i.test(value))).toBe(true);
+    expect(text.some((value) => /שאלת המשך|שאלות המשך/.test(value))).toBe(true);
   });
 });
