@@ -15,9 +15,12 @@ x-app: &app
     options: { max-size: "10m", max-file: "3" }
 
 services:
-  # The database and Redis services carry a `ks-` prefix on purpose. The web container also
+  # Every long-running service carries a `ks-` prefix on purpose. The web container also
   # sits on the reverse proxy's network, where the other product has services named
-  # `postgres` and `redis`; with the plain names the web container resolved those instead.
+  # `postgres`, `redis` and `web`. With the plain names the web container resolved the other
+  # product's database and Redis, and Docker registered this stack's web container under the
+  # extra alias `web` on the proxy's network, so the proxy sometimes sent the other product's
+  # traffic here. Never give a service here a name that exists in the other stack.
   ks-postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -55,7 +58,7 @@ services:
     depends_on:
       ks-postgres: { condition: service_healthy }
 
-  web:
+  ks-web:
     <<: *app
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -72,7 +75,7 @@ services:
         aliases: [knowledge-studio-web]
     mem_limit: 768m
 
-  worker:
+  ks-worker:
     <<: *app
     command: ["pnpm", "--filter", "@hks/worker", "start"]
     depends_on:
