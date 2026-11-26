@@ -297,6 +297,13 @@ export async function getDocumentSummary(tx: Executor, ctx: TenantContext, docum
   return row ?? null;
 }
 
+/** Removes every saved summary of a document (all languages), for example after re-indexing. */
+export async function deleteDocumentSummaries(tx: Executor, ctx: TenantContext, documentId: string) {
+  await tx
+    .delete(documentSummaries)
+    .where(and(eq(documentSummaries.organizationId, ctx.organizationId), eq(documentSummaries.documentId, documentId)));
+}
+
 /** Saves the summary for a document and language, replacing an earlier one. */
 export async function saveDocumentSummary(
   tx: Executor,

@@ -11,6 +11,7 @@ import {
 import {
   beginDocumentDeletion,
   createDocument,
+  deleteDocumentSummaries,
   createIngestionJob,
   ensureActiveEmbeddingIndex,
   finishDocumentDeletion,
@@ -118,6 +119,7 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
   const { config, db, storage, embeddings } = services;
   const ctx: TenantContext = { organizationId: data.organizationId, workspaceId: data.workspaceId };
   const tenant = <T>(work: Parameters<typeof withTenant<T>>[2]) => withTenant(db, ctx.organizationId, work);
+  let reindexing = false;
   const step = (name: NonNullable<Parameters<typeof updateIngestionJob>[3]["step"]>, progress: number) =>
     tenant((tx) => updateIngestionJob(tx, ctx, data.jobId, { step: name, progress }));
 
@@ -125,7 +127,8 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
     if (!embeddings) throw new AppError("not_configured", "No embeddings provider is configured");
     const document = await tenant((tx) => getDocument(tx, ctx, data.documentId));
     if (!document || document.status === "deleting") throw new AppError("not_found", "The document no longer exists");
-    if (document.status === "ready") return; // already done (duplicate delivery)
+    reindexing = Boolean(data.reindex) && document.status === "ready";
+    if (document.status === "ready" && !reindexing) return; // already done (duplicate delivery)
 
     await tenant((tx) =>
       updateIngestionJob(tx, ctx, data.jobId, { status: "running", step: "validating", progress: 5, attempt: options.attempt, startedAt: new Date() }),
@@ -138,7 +141,10 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
     const { fileType } = detectFileType(bytes, document.originalFilename); // re-validate what was actually stored
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     try {
-      await tenant((tx) => updateDocument(tx, ctx, document.id, { status: "processing", contentSha256: sha256, failureCode: null, failureDetail: null }));
+      // A re-index keeps the document Ready (and searchable) until the new passages are stored.
+      if (!reindexing) {
+        await tenant((tx) => updateDocument(tx, ctx, document.id, { status: "processing", contentSha256: sha256, failureCode: null, failureDetail: null }));
+      }
     } catch (error) {
       if (uniqueViolation(error, "documents_no_duplicates")) {
         throw new AppError("duplicate_document", "This file has already been added to the workspace");
@@ -207,16 +213,21 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
     await step("chunking", 35);
     const maxChars = Math.min(config.CHUNK_MAX_CHARS, embeddings.maxCharsPerText);
     const targetChars = Math.min(config.CHUNK_TARGET_CHARS, maxChars);
+    const tokenLimit = embeddings.estimateTokens && embeddings.maxTokensPerText
+      ? { max: embeddings.maxTokensPerText, estimate: embeddings.estimateTokens }
+      : undefined;
     const chunks = chunkBlocks(extracted.blocks, {
       targetChars,
       maxChars,
       overlapChars: Math.min(config.CHUNK_OVERLAP_CHARS, maxChars - targetChars),
+      tokens: tokenLimit,
     });
     if (chunks.length === 0) throw new AppError("extraction_failed", "No text was found in the file");
 
     await step("embedding", 45);
     const index = await ensureActiveEmbeddingIndex(db, embeddings.descriptor);
-    // Size every chunk to the model's token limit first (a conservative estimate, see the provider).
+    // The chunker already packs to the token limit; this only catches what it could not
+    // (a provider without an estimate, or a single unbreakable run of text).
     const fits = (text: string) =>
       text.length <= embeddings.maxCharsPerText &&
       (!embeddings.estimateTokens || !embeddings.maxTokensPerText || embeddings.estimateTokens(text) <= embeddings.maxTokensPerText);
@@ -249,6 +260,8 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
       const current = await getDocument(tx, ctx, document.id);
       if (!current || current.status === "deleting") throw new AppError("not_found", "The document was deleted during processing");
       await replaceChunks(tx, ctx, document.id, index.id, chunks.map((chunk, i) => ({ ...chunk, embedding: vectors[i]! })));
+      // A saved summary points at passages by id and offset; after re-chunking those are gone.
+      if (reindexing) await deleteDocumentSummaries(tx, ctx, document.id);
       await updateDocument(tx, ctx, document.id, {
         status: "ready",
         chunkCount: chunks.length,
@@ -271,7 +284,7 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
         correlationId: data.correlationId,
       });
     });
-    log("info", "ingestion.succeeded", { documentId: document.id, chunks: chunks.length, correlationId: data.correlationId });
+    log("info", "ingestion.succeeded", { documentId: document.id, chunks: chunks.length, reindex: reindexing, correlationId: data.correlationId });
   } catch (error) {
     const permanent = isPermanentFailure(error);
     const code: ErrorCode = isAppError(error) ? error.code : "internal";
@@ -281,6 +294,8 @@ export async function ingestDocument(services: Services, data: IngestionJobData,
     if (permanent || options.finalAttempt) {
       await tenant(async (tx) => {
         await updateIngestionJob(tx, ctx, data.jobId, { status: "failed", errorCode: code, errorDetail: detail, finishedAt: new Date() });
+        // A failed re-index leaves the document Ready with its earlier passages.
+        if (reindexing) return;
         // If the document row is already gone this updates nothing.
         await updateDocument(tx, ctx, data.documentId, {
           status: code === "unsupported_scanned_pdf" || code === "unsupported_file_type" ? "unsupported" : "failed",
@@ -358,6 +373,23 @@ export async function retryIngestion(services: Services, ctx: TenantContext, doc
     return createIngestionJob(tx, ctx, { documentId, correlationId });
   });
   await services.queue.enqueueIngestion({ ...ctx, documentId, jobId: job.id, correlationId });
+}
+
+/**
+ * Queues a Ready document to be indexed again with the current extraction and chunking rules
+ * (operators run this through scripts/reindex-documents.mts). It costs embedding tokens like an
+ * upload and is reserved against the organization's daily budget the same way. The document
+ * stays Ready while the job runs; old conversations keep their stored citation excerpts.
+ */
+export async function reindexDocument(services: Services, ctx: TenantContext, documentId: string, correlationId: string) {
+  const job = await withTenant(services.db, ctx.organizationId, async (tx) => {
+    const document = await getDocument(tx, ctx, documentId);
+    if (!document) throw new AppError("not_found");
+    if (document.status !== "ready") throw new AppError("conflict", "Only ready documents can be indexed again");
+    return createIngestionJob(tx, ctx, { documentId, correlationId });
+  });
+  await services.queue.enqueueIngestion({ ...ctx, documentId, jobId: job.id, correlationId, reindex: true });
+  return job;
 }
 
 /**

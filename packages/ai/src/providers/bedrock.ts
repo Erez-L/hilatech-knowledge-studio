@@ -150,16 +150,26 @@ const COHERE_TARGET_TOKENS = 400;
 
 /**
  * A deliberately high estimate of Cohere's token count. The real tokenizer is not available
- * locally, so this is NOT a validation: it assumes one token per 3 characters of a Latin-script
- * word or number (English averages about 4), one token per 1.5 characters of any other script
- * (Hebrew, and anything else outside ASCII), and one token per punctuation mark or symbol.
- * Whether the headroom is enough is measured by the live embeddings test.
+ * locally, so this is NOT a validation. It assumes:
+ * - a Latin-script word or number: one token per 3 characters (English averages about 4);
+ * - a Hebrew word: one token, plus one per 3 letters. Calibrated on the live
+ *   measurement in docs/VERIFICATION_RUN_2026-11-17.md: a Hebrew prose sentence repeated to
+ *   1,500 characters was accepted under the 512-token limit and to 1,800 characters rejected,
+ *   so that prose needs at most 512 / 1,500 = 0.34 tokens per character; this estimate gives
+ *   0.38 for it, and the 400-token target leaves another 28% of headroom on top;
+ * - a Hebrew vowel or cantillation mark: one token each (pointed text splits into many pieces);
+ * - any other script: one token per 1.5 characters; a punctuation mark or symbol: one token.
+ * Whether the headroom holds is measured by the live embeddings test, and a passage the service
+ * still rejects is split and retried (see the ingestion code), never truncated.
  */
 export function estimateCohereTokens(text: string): number {
   let tokens = 0;
-  for (const run of text.match(/[A-Za-z0-9]+|[^\sA-Za-z0-9]/gu) ?? []) {
+  for (const run of text.match(/[A-Za-z0-9]+|[\u05D0-\u05EA\u05EF-\u05F4]+|[^\sA-Za-z0-9]/gu) ?? []) {
+    const first = run.charCodeAt(0);
     if (/^[A-Za-z0-9]/.test(run)) tokens += Math.ceil(run.length / 3);
-    else tokens += run.charCodeAt(0) < 128 ? 1 : 1 / 1.5;
+    else if (first >= 0x05d0 && first <= 0x05f4) tokens += Math.floor(run.length / 3) + 1;
+    else if (first >= 0x0591 && first <= 0x05c7) tokens += 1;
+    else tokens += first < 128 ? 1 : 1 / 1.5;
   }
   return Math.ceil(tokens) + 2; // start and end markers
 }
