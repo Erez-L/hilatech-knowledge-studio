@@ -39,14 +39,18 @@ export async function extractDocument(
  * (scripts/check-samples.ts). Hebrew PDFs from other producers are not verified.
  */
 async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?: ScannedPageReading): Promise<ExtractedDocument> {
-  const { extractText: pdfText, getDocumentProxy } = await loadPdfLibrary();
+  const { getDocumentProxy } = await loadPdfLibrary();
   let pages: string[];
   let totalPages: number;
   try {
     const pdf = await getDocumentProxy(new Uint8Array(bytes));
     totalPages = pdf.numPages;
     if (totalPages > limits.maxPages) throw new AppError("too_many_pages", `The PDF has more than ${limits.maxPages} pages`);
-    pages = (await pdfText(pdf, { mergePages: false })).text;
+    pages = [];
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
+      const content = await (await pdf.getPage(pageNumber)).getTextContent();
+      pages.push(joinTextItems(content.items.flatMap((item) => ("str" in item ? [item] : []))));
+    }
   } catch (error) {
     if (isAppError(error)) throw error;
     const name = (error as { name?: string }).name ?? "";
@@ -93,6 +97,51 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?:
       sectionPath: null,
     })),
   };
+}
+
+/** The parts of a pdf.js text item that joining needs. `transform` is [a, b, c, d, x, y]. */
+export type PdfTextItem = { str: string; transform: number[]; width: number; height: number; hasEOL: boolean };
+
+/**
+ * A word gap wider than this share of the font size is a space. Gaps between the letters of one
+ * word (kerning, a font change mid-word) are far smaller; a normal word space is about a quarter.
+ */
+const SPACE_GAP_RATIO = 0.15;
+
+/**
+ * Joins the text items of one PDF page into text, using where each item sits on the page.
+ *
+ * Many PDF producers, Hebrew ones especially, draw every word (or every few letters) as its own
+ * item and leave the space out: the gap is just empty page. Joining the strings as they come
+ * ("".join) then glues the words together. Here a space is added between two items on the same
+ * line when the horizontal gap between them is wider than a fraction of the font size, whichever
+ * side of the earlier item the later one is on (so right-to-left lines work the same), and a line
+ * break is added at each end of line. Text the producer already spaced is left as it is.
+ */
+export function joinTextItems(items: PdfTextItem[]): string {
+  let out = "";
+  let previous: { left: number; right: number; y: number; size: number } | null = null;
+  for (const item of items) {
+    const [, , c = 0, d = 0, x = 0, y = 0] = item.transform;
+    const size = Math.hypot(c, d) || item.height || 1;
+    if (item.str.length > 0 && previous && !out.endsWith("\n")) {
+      const sameLine = Math.abs(y - previous.y) <= Math.max(size, previous.size) * 0.5;
+      if (!sameLine) out += "\n";
+      else {
+        // Distance between the two items' horizontal extents; zero or less when they touch or overlap.
+        const gap = Math.max(x, previous.left) - Math.min(x + item.width, previous.right);
+        if (gap > Math.min(size, previous.size) * SPACE_GAP_RATIO && !/\s$/.test(out) && !/^\s/.test(item.str)) out += " ";
+      }
+    }
+    out += item.str;
+    if (item.hasEOL) {
+      out += "\n";
+      previous = null;
+    } else if (item.str.length > 0) {
+      previous = { left: x, right: x + item.width, y, size };
+    }
+  }
+  return out;
 }
 
 /** A page with fewer printed characters than this in its text layer is treated as a scan. */

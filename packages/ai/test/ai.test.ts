@@ -192,21 +192,23 @@ describe("extraction", () => {
 
 describe("Cohere token estimate and chunk splitting", () => {
   const hebrew = "לקוחות בתוכנית זכאים להחזר מלא בתוך שלושים יום ממועד הרכישה. ";
-  it("is conservative: never below one token per 4 Latin characters or per 2 Hebrew characters", () => {
+  it("is conservative: never below one token per 4 Latin characters, or per 3 Hebrew letters and one per word", () => {
     const english = "Annual plans are refunded in full within thirty days of purchase. ".repeat(20);
     expect(estimateCohereTokens(english)).toBeGreaterThan(english.replace(/\s/g, "").length / 4);
     const he = hebrew.repeat(20);
-    expect(estimateCohereTokens(he)).toBeGreaterThan(he.replace(/\s/g, "").length / 2);
+    expect(estimateCohereTokens(he)).toBeGreaterThan(he.replace(/[^\u05D0-\u05EA]/g, "").length / 3);
+    expect(estimateCohereTokens(he)).toBeGreaterThan(he.trim().split(/\s+/).length);
     expect(estimateCohereTokens("")).toBe(2);
     expect(estimateCohereTokens("a")).toBe(3);
   });
 
-  it("sizes Hebrew text to fewer characters than English for the same limit, and mixed text in between", () => {
+  it("allows no more characters per token than measured or documented, for Hebrew, English and mixed text", () => {
     const perChar = (text: string) => estimateCohereTokens(text.repeat(30)) / (text.length * 30);
-    const english = perChar("Refunds are approved by the team lead. ");
-    const mixed = perChar("תוכנית Bookkeeping Growth עולה $640 לחודש. ");
-    expect(perChar(hebrew)).toBeGreaterThan(mixed);
-    expect(mixed).toBeGreaterThan(english);
+    // Hebrew prose: at most 512 tokens per 1,500 characters was measured live (see hebrew-text.test.ts).
+    expect(perChar(hebrew)).toBeGreaterThanOrEqual(512 / 1500);
+    // English: the model documentation's figure is about 4 characters per token.
+    expect(perChar("Refunds are approved by the team lead. ")).toBeGreaterThan(1 / 4);
+    expect(perChar("תוכנית Bookkeeping Growth עולה $640 לחודש. ")).toBeGreaterThan(1 / 4);
   });
 
   it("the adapter refuses an over-long text locally, as a typed error, instead of sending or truncating it", async () => {

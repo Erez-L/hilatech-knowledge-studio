@@ -44,6 +44,15 @@ Commands on the host were run as root through AWS Systems Manager (`aws ssm send
 
 To go back before pruning: `./deploy.sh <previous tag>`.
 
+### Re-indexing stored documents
+
+A release that changes extraction or chunking (the `chunking_version` stored with each passage) applies only to new uploads until stored documents are indexed again. With the worker running:
+
+1. See what would be queued: `docker compose -f docker-compose.prod.yml --env-file .env run --rm --no-deps -T ks-worker pnpm -s reindex`.
+2. Queue them: the same command with `pnpm -s reindex --apply` (optionally `--organization <id>`, and `--document <id>`).
+
+Each document costs embedding tokens like a new upload, reserved against its organization's daily AI budget. A document stays Ready and searchable while it is re-indexed; a failed job leaves it as it was. Saved summaries of a re-indexed document are removed (they point at the old passages) and can be created again from the library.
+
 ### The release that renames `web` and `worker`
 
 The first deploy after the rename to `ks-web` and `ks-worker` needs the new `docker-compose.prod.yml` and `deploy.sh` copied to `/opt/knowledge-studio` first. `deploy.sh` then creates the containers `knowledge-studio-ks-web-1` and `knowledge-studio-ks-worker-1`, and its `--remove-orphans` removes the old `knowledge-studio-web-1` and `knowledge-studio-worker-1`. The site is down for the seconds between the two. The Caddy block does not change: it points at the alias `knowledge-studio-web`. Going back to an older image tag with the new compose file works; going back to the old compose file brings the name collision back.
