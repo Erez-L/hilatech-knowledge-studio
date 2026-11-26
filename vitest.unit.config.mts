@@ -1,7 +1,8 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * The tests that need no PostgreSQL and no Redis (`pnpm test:unit`). This is what CI runs.
+ * The tests that need no PostgreSQL and no Redis (`pnpm test:unit`): the "checks" job in CI.
+ * The suites excluded here run in the "database" job of .github/workflows/ci.yml.
  * A test file that needs one of those services must be added to `exclude` here; it still runs
  * with `pnpm test`, which uses vitest.config.mts and the local test services.
  */
