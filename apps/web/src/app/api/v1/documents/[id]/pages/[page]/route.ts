@@ -1,6 +1,6 @@
 import { renderPdfPage } from "@hks/ai";
-import { getDocument, withTenant } from "@hks/database";
 import { AppError } from "@hks/shared";
+import { findReadableDocument } from "@/server/cited-document";
 import { requireContext } from "@/server/context";
 import { enforceRateLimit, route, uuidParam } from "@/server/http";
 import { getServices } from "@/server/services";
@@ -15,9 +15,10 @@ export const GET = route<{ id: string; page: string }>(async ({ request, params,
   if (!Number.isInteger(page) || page < 1) throw new AppError("not_found");
   await enforceRateLimit("page-render", ctx.user.id, 120, 60);
 
-  const { db, storage } = getServices();
-  const doc = await withTenant(db, ctx.tenant.organizationId, (tx) => getDocument(tx, ctx.tenant, id));
-  if (!doc || doc.status === "deleting" || doc.fileType !== "pdf") throw new AppError("not_found");
+  const { storage } = getServices();
+  // Also a document moved to another project of the organization, so old citations keep opening.
+  const doc = (await findReadableDocument(ctx, id))?.document;
+  if (!doc || doc.fileType !== "pdf") throw new AppError("not_found");
   if (doc.pageCount !== null && page > doc.pageCount) throw new AppError("not_found");
 
   const png = await renderPdfPage(await storage.get(doc.storageKey), page);
