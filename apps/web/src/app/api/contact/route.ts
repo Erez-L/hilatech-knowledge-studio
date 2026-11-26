@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { createMailer, notifyLead, type Mailer } from "@hks/core";
+import { getConfig } from "@hks/shared";
 import { contactSchema, fieldErrors, type ContactResponse } from "@/lib/contact";
 import { clientIp } from "@/lib/client-ip";
 import { getLeadStore } from "@/lib/lead-store";
@@ -27,6 +29,21 @@ async function checkLimit(ip: string | null): Promise<{ allowed: boolean; retryA
     }
   }
   return ip ? memoryPerClient.hit(ip) : memoryUnidentified.hit("unidentified");
+}
+
+// One mail transport per server process, created on the first request that needs it.
+let mailer: Mailer | null | undefined;
+
+/** Mails the stored request to the owner address in LEADS_NOTIFY_EMAIL, when one is set. Never throws. */
+async function notifyOwner(lead: Parameters<typeof notifyLead>[2]) {
+  try {
+    const config = getConfig();
+    if (!config.LEADS_NOTIFY_EMAIL) return;
+    if (mailer === undefined) mailer = createMailer(config);
+    await notifyLead(mailer, config.LEADS_NOTIFY_EMAIL, lead);
+  } catch {
+    console.error(JSON.stringify({ level: "error", event: "contact.notify_failed", requestId: lead.requestId }));
+  }
 }
 
 function reply(body: ContactResponse, status: number, requestId: string, extraHeaders: Record<string, string> = {}) {
@@ -72,9 +89,12 @@ export async function POST(request: Request) {
   try {
     const { website: _honeypot, ...lead } = parsed.data;
     void _honeypot;
-    await store.save({ ...lead, receivedAt: new Date().toISOString(), requestId });
+    const stored = { ...lead, receivedAt: new Date().toISOString(), requestId };
+    await store.save(stored);
     // No personal data in logs.
     console.info(JSON.stringify({ level: "info", event: "contact.received", requestId, locale: lead.locale }));
+    // The request is saved; a mail problem from here on is logged and does not fail the form.
+    await notifyOwner(stored);
     return reply({ ok: true }, 201, requestId);
   } catch {
     console.error(JSON.stringify({ level: "error", event: "contact.store_failed", requestId }));

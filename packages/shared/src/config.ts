@@ -83,6 +83,9 @@ const schema = z.object({
   SMTP_URL: z.string().optional(),
   // Region of the Amazon SES identity; falls back to AWS_REGION.
   SES_REGION: z.string().optional(),
+  // Every contact-form request is also mailed to this address, through MAIL_TRANSPORT.
+  // Not set: no notification is sent. An empty value counts as not set.
+  LEADS_NOTIFY_EMAIL: z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? undefined : value), z.string().trim().email().max(254).optional()),
 
   LIMIT_AUTH_ATTEMPTS_PER_MINUTE: int(10, 1),
 
