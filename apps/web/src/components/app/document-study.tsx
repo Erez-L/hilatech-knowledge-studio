@@ -7,6 +7,7 @@ import { Link } from "@/i18n/navigation";
 import { ApiError, type DocumentContent, type SummaryView } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useApp } from "./app-provider";
 import { OpenNavigationButton } from "./app-shell";
 
@@ -42,6 +43,8 @@ export function DocumentStudy({ documentId }: { documentId: string }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<number | null>(null);
+  // Summarizing again is a paid call of up to a minute that replaces the saved summary: asked first.
+  const [confirmAgain, setConfirmAgain] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,12 +110,24 @@ export function DocumentStudy({ documentId }: { documentId: string }) {
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-body font-semibold" dir="auto">{content?.document.title ?? t("title")}</h1>
         {state === "ready" ? (
-          <Button onClick={() => void generate()} disabled={working}>
+          <Button onClick={() => (summary ? setConfirmAgain(true) : void generate())} disabled={working}>
             {working ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <Highlighter className="size-4" aria-hidden />}
             {working ? t("working") : summary ? t("again") : t("start")}
           </Button>
         ) : null}
       </header>
+      <ConfirmDialog
+        open={confirmAgain}
+        title={t("againTitle")}
+        body={t("againBody")}
+        confirmLabel={t("againConfirm")}
+        cancelLabel={t("cancel")}
+        onConfirm={() => {
+          setConfirmAgain(false);
+          void generate();
+        }}
+        onCancel={() => setConfirmAgain(false)}
+      />
 
       {state === "loading" ? (
         <p className="p-8 text-small text-secondary">{t("loading")}</p>

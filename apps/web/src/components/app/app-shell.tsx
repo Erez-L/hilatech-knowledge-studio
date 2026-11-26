@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleHelp, LibraryBig, LogOut, Menu, MessageSquareText, MessagesSquare, Plus, Trash2 } from "lucide-react";
+import { CircleHelp, ExternalLink, LibraryBig, LogOut, Menu, MessageSquareText, MessagesSquare, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
@@ -11,6 +11,7 @@ import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import { Logo } from "@/components/shared/logo";
 import { ThemeSwitcher } from "@/components/shared/theme-switcher";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useApp } from "./app-provider";
 import { ProjectSwitcher } from "./project-switcher";
@@ -22,7 +23,24 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const active = useSearchParams().get("c");
   const { me, conversations, removeConversation } = useApp();
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const onAsk = pathname === "/app";
+
+  const deleteConversation = async () => {
+    if (!confirm) return;
+    setDeleting(true);
+    try {
+      await removeConversation(confirm.id);
+      if (onAsk && active === confirm.id) router.replace("/app");
+      setNotice(null);
+    } catch {
+      setNotice(t("deleteFailed"));
+    } finally {
+      setDeleting(false);
+      setConfirm(null);
+    }
+  };
 
   const signOut = async () => {
     await authClient.signOut();
@@ -59,13 +77,18 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex flex-col gap-1 px-4 pb-3">
           {navItem("/app", t("workspace"), MessagesSquare, onAsk)}
           {navItem("/app/library", t("library"), LibraryBig, pathname.startsWith("/app/library"))}
+          {/* In a new tab: the guide is a public page, and the open conversation stays as it is. */}
           <Link
             href="/help"
+            target="_blank"
+            rel="noopener"
             onClick={onNavigate}
             className="flex min-h-11 items-center gap-3 rounded-control px-3 text-small font-semibold text-secondary transition-colors hover:bg-hover hover:text-foreground"
           >
             <CircleHelp className="size-4.5 shrink-0" aria-hidden />
             {t("guide")}
+            <ExternalLink className="size-3.5 shrink-0 text-tertiary rtl:-scale-x-100" aria-hidden />
+            <span className="sr-only">{t("newTab")}</span>
           </Link>
         </div>
 
@@ -110,14 +133,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         {title}
                       </span>
                     </Link>
+                    {/* Shown on hover and focus with a mouse; always shown on touch screens, which have no hover. */}
                     <button
                       type="button"
                       aria-label={t("deleteConversation", { title })}
-                      onClick={async () => {
-                        await removeConversation(conversation.id).catch(() => {});
-                        if (current) router.replace("/app");
-                      }}
-                      className="absolute end-1 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-control text-tertiary opacity-0 transition-[opacity,color,background-color] group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-hover hover:text-danger focus-visible:opacity-100"
+                      onClick={() => setConfirm({ id: conversation.id, title })}
+                      className="absolute end-0.5 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-control text-tertiary transition-[opacity,color,background-color] hover:bg-hover hover:text-danger pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100"
                     >
                       <Trash2 className="size-4" aria-hidden />
                     </button>
@@ -149,6 +170,18 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <p aria-live="polite" className="px-2 text-label text-secondary empty:hidden">
           {notice}
         </p>
+        <ConfirmDialog
+          open={confirm !== null}
+          title={t("deleteConversationTitle")}
+          body={confirm ? t("deleteConversationBody", { title: confirm.title }) : ""}
+          confirmLabel={t("confirmDelete")}
+          cancelLabel={t("cancel")}
+          busyLabel={t("deleting")}
+          busy={deleting}
+          danger
+          onConfirm={() => void deleteConversation()}
+          onCancel={() => setConfirm(null)}
+        />
         <div className="flex items-center justify-between">
           <button
             type="button"

@@ -2,7 +2,7 @@
 
 import { GuideSteps } from "./guide-steps";
 import { useRouter } from "@/i18n/navigation";
-import { Dialog } from "radix-ui";
+import { Dialog, DropdownMenu } from "radix-ui";
 import { Check, CloudUpload, Eye, FolderInput, Highlighter, LoaderCircle, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
@@ -27,7 +27,6 @@ const inProgress = (doc: DocumentView) => ["queued", "processing", "uploaded", "
 
 export function Library() {
   const router = useRouter();
-  const [moving, setMoving] = useState<string | null>(null);
   const t = useTranslations("app.library");
   const tw = useTranslations("workspace");
   const te = useTranslations("app.evidence");
@@ -140,7 +139,6 @@ export function Library() {
   };
 
   const move = async (doc: DocumentView, projectId: string) => {
-    setMoving(null);
     try {
       await api.moveDocument(doc.id, projectId);
       setToast(t("toastMoved", { title: doc.title, project: otherProjects.find((p) => p.id === projectId)?.name ?? "" }));
@@ -353,46 +351,58 @@ export function Library() {
 
                       <div className="order-2 flex items-center justify-end gap-0.5 lg:order-none">
                         {doc.status === "ready" && (
-                          <IconAction
-                            label={t("open", { title: doc.title })}
+                          <TextAction
+                            subject={doc.title}
+                            text={t("view")}
                             onClick={() => setPreview({ documentId: doc.id, title: doc.title, fileType: doc.fileType, page: doc.fileType === "pdf" ? 1 : null, chunkId: null })}
                           >
                             <Eye className="size-4.5" aria-hidden />
-                          </IconAction>
+                          </TextAction>
                         )}
                         {doc.status === "ready" && (
-                          <IconAction label={t("study", { title: doc.title })} onClick={() => router.push(`/app/library/${doc.id}`)}>
+                          <TextAction subject={doc.title} text={t("studyShort")} onClick={() => router.push(`/app/library/${doc.id}`)}>
                             <Highlighter className="size-4.5" aria-hidden />
-                          </IconAction>
+                          </TextAction>
                         )}
                         {doc.status === "failed" && canUpload && (
-                          <IconAction label={`${t("retry")}: ${doc.title}`} onClick={() => void retry(doc)}>
+                          <TextAction subject={doc.title} text={t("retry")} onClick={() => void retry(doc)}>
                             <RotateCcw className="size-4.5 rtl:-scale-x-100" aria-hidden />
-                          </IconAction>
+                          </TextAction>
                         )}
                         {doc.status === "ready" && canUpload && otherProjects.length > 0 && (
-                          <span className="relative">
-                            <IconAction label={t("move", { title: doc.title })} onClick={() => setMoving(moving === doc.id ? null : doc.id)}>
-                              <FolderInput className="size-4.5" aria-hidden />
-                            </IconAction>
-                            {moving === doc.id && (
-                              <span role="menu" aria-label={t("moveTo")} className="absolute end-0 top-full z-20 mt-1 flex w-60 flex-col gap-0.5 rounded-control border border-border-strong bg-surface p-1.5 shadow-raised">
-                                <span className="px-2 py-1 text-label font-semibold text-tertiary">{t("moveTo")}</span>
+                          // A real menu: arrow keys, Escape, outside click, focus return, and placement that stays on screen.
+                          <DropdownMenu.Root>
+                            <DropdownMenu.Trigger asChild>
+                              <button
+                                type="button"
+                                aria-label={t("move", { title: doc.title })}
+                                title={t("move", { title: doc.title })}
+                                className="inline-flex size-10 items-center justify-center rounded-control text-secondary transition-colors hover:bg-hover hover:text-foreground data-[state=open]:bg-hover"
+                              >
+                                <FolderInput className="size-4.5" aria-hidden />
+                              </button>
+                            </DropdownMenu.Trigger>
+                            <DropdownMenu.Portal>
+                              <DropdownMenu.Content
+                                align="end"
+                                sideOffset={4}
+                                collisionPadding={8}
+                                className="z-50 flex w-60 flex-col gap-0.5 rounded-control border border-border-strong bg-surface p-1.5 shadow-raised"
+                              >
+                                <DropdownMenu.Label className="px-2 py-1 text-label font-semibold text-tertiary">{t("moveTo")}</DropdownMenu.Label>
                                 {otherProjects.map((project) => (
-                                  <button
+                                  <DropdownMenu.Item
                                     key={project.id}
-                                    type="button"
-                                    role="menuitem"
                                     dir="auto"
-                                    onClick={() => void move(doc, project.id)}
-                                    className="min-h-9 truncate rounded-control px-2 text-start text-small hover:bg-hover"
+                                    onSelect={() => void move(doc, project.id)}
+                                    className="flex min-h-10 cursor-pointer items-center truncate rounded-control px-2 text-start text-small outline-none data-highlighted:bg-hover"
                                   >
                                     {project.name}
-                                  </button>
+                                  </DropdownMenu.Item>
                                 ))}
-                              </span>
-                            )}
-                          </span>
+                              </DropdownMenu.Content>
+                            </DropdownMenu.Portal>
+                          </DropdownMenu.Root>
                         )}
                         {canDelete(doc) && (
                           <IconAction label={`${t("delete")}: ${doc.title}`} onClick={() => setConfirm(doc)} danger>
@@ -448,7 +458,7 @@ export function Library() {
 
       {/* Document preview */}
       <Sheet open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
-        <SheetContent side="end" title={te("title")} closeLabel={tw("evidence.close")} className="bg-sunken">
+        <SheetContent side="end" title={preview?.title ?? te("title")} closeLabel={tw("evidence.close")} className="bg-sunken">
           {preview && <SourceViewer sources={[]} selectedLabel={null} onSelectSource={() => {}} target={preview} onNavigate={setPreview} />}
         </SheetContent>
       </Sheet>
@@ -511,6 +521,26 @@ function IconAction({ label, onClick, danger, children }: { label: string; onCli
       )}
     >
       {children}
+    </button>
+  );
+}
+
+/**
+ * A row action with its name written next to the icon from the small breakpoint up (on a phone,
+ * the icon alone). The accessible name is the same words plus the document, so it matches what
+ * is shown: "View: Refund policy".
+ */
+function TextAction({ text, subject, onClick, children }: { text: string; subject: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={text}
+      onClick={onClick}
+      className="inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-control px-2 text-label font-semibold text-secondary transition-colors hover:bg-hover hover:text-foreground"
+    >
+      {children}
+      <span className="whitespace-nowrap max-sm:sr-only">{text}</span>
+      <span className="sr-only">: {subject}</span>
     </button>
   );
 }

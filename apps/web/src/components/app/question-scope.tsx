@@ -2,7 +2,7 @@
 
 import { ChevronDown, Filter } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { DocumentView } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
@@ -23,6 +23,8 @@ export function QuestionScope({
 }) {
   const t = useTranslations("app.scope");
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
   const ready = documents.filter((document) => document.status === "ready");
   if (ready.length < 2) return null;
   const chosen = new Set(selected.filter((id) => ready.some((document) => document.id === id)));
@@ -34,11 +36,22 @@ export function QuestionScope({
   };
 
   return (
-    <div className="mx-auto mb-2 w-full max-w-[46rem]">
+    <div
+      className="mx-auto mb-2 w-full max-w-[46rem]"
+      onKeyDown={(event) => {
+        // Escape closes the list and returns focus to its button.
+        if (event.key !== "Escape" || !open) return;
+        event.stopPropagation();
+        setOpen(false);
+        trigger.current?.focus();
+      }}
+    >
       <button
+        ref={trigger}
         type="button"
         disabled={disabled}
         aria-expanded={open}
+        aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
         className={cn(
           "inline-flex min-h-9 items-center gap-2 rounded-control border px-3 text-label font-semibold transition-colors",
@@ -51,7 +64,7 @@ export function QuestionScope({
       </button>
 
       {open ? (
-        <fieldset className="mt-2 rounded-control border border-border bg-surface p-3">
+        <fieldset id={panelId} className="mt-2 rounded-control border border-border bg-surface p-3">
           <legend className="sr-only">{t("legend")}</legend>
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-label text-tertiary">{t("help")}</p>
