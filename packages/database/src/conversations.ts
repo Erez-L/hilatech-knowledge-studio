@@ -142,6 +142,22 @@ export async function addAssistantMessage(
   return { message, citations: saved };
 }
 
+/**
+ * The last `limit` messages of a conversation, oldest first, without citations: what a follow-up
+ * question needs to know about the earlier turns. The caller has already checked that the
+ * conversation belongs to the asker.
+ */
+export async function listRecentMessages(tx: Executor, ctx: TenantContext, conversationId: string, limit: number) {
+  if (limit <= 0) return [];
+  const rows = await tx
+    .select({ role: messages.role, content: messages.content, status: messages.status, answerStatus: messages.answerStatus })
+    .from(messages)
+    .where(and(eq(messages.organizationId, ctx.organizationId), eq(messages.conversationId, conversationId)))
+    .orderBy(desc(messages.createdAt), desc(messages.id))
+    .limit(Math.min(limit, 50));
+  return rows.reverse();
+}
+
 export async function listMessages(tx: Executor, ctx: TenantContext, conversationId: string) {
   const rows = await tx
     .select()

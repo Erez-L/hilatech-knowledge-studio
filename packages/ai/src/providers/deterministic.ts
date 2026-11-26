@@ -36,6 +36,10 @@ export class DeterministicEmbeddings implements EmbeddingsProvider {
     return this.embed(text);
   }
 
+  async embedQueries(texts: string[]): Promise<number[][]> {
+    return texts.map((text) => this.embed(text));
+  }
+
   private embed(text: string): number[] {
     const { dimensions } = this.descriptor;
     const vector = new Array<number>(dimensions).fill(0);

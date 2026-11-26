@@ -387,6 +387,70 @@ describe("question → retrieval → grounded answer", () => {
     const mine = await ask(a, "What is the refund window for annual plans?");
     expect(await codeOf(ask(b, "follow up", {}, { conversationId: mine.start!.conversationId }))).toBe("not_found");
   });
+
+  it("answers a follow-up question from the subject of the earlier turn, and still validates every citation", async () => {
+    const t = await tenant("follow-up");
+    const plans = await upload(t, "orchard-plans.txt", new TextEncoder().encode(
+      "Orchard Basic and Orchard Pro are the two subscription plans. Orchard Pro includes priority support and a dedicated account manager.",
+    ));
+    await upload(t, "office-hours.txt", new TextEncoder().encode("The office is closed on public holidays listed in the yearly schedule."));
+    const requests: string[] = [];
+    const recording: ChatModelProvider = {
+      descriptor: new DeterministicChatModel().descriptor,
+      async *streamAnswer(request, signal) {
+        requests.push(request.user);
+        yield* new DeterministicChatModel().streamAnswer(request, signal);
+      },
+    };
+
+    const first = await ask(t, "Which subscription plans does Orchard offer?", { chat: recording });
+    expect(first.done).toMatchObject({ answerStatus: "answered" });
+    expect(requests[0]).not.toContain("<history>");
+
+    // The follow-up names nothing the documents contain; alone it finds no evidence.
+    const followUp = "And what does the second one include?";
+    const alone = await ask(t, followUp, { chat: recording });
+    expect(alone.done).toMatchObject({ answerStatus: "insufficient_evidence", sources: [] });
+
+    const second = await ask(t, followUp, { chat: recording }, { conversationId: first.start!.conversationId });
+    expect(second.done).toMatchObject({ answerStatus: "answered" });
+    expect(second.done!.sources[0]!.documentId).toBe(plans.id);
+    const sent = requests.at(-1)!;
+    expect(sent).toContain("<history>");
+    expect(sent).toContain("Which subscription plans does Orchard offer?");
+    expect(sent.slice(sent.indexOf("<history>"))).not.toMatch(/\[S\d+\]/); // earlier markers are not offered again
+
+    // Turned off, the same follow-up in the same conversation is answered on its own words only.
+    const off = await ask(t, followUp, { chat: recording, config: parseConfig({ ...baseEnv, RAG_HISTORY_TURNS: "0" }) }, { conversationId: first.start!.conversationId });
+    expect(off.done).toMatchObject({ answerStatus: "insufficient_evidence" });
+
+    const thread = await withTenant(database.db, t.organizationId, (tx) => listMessages(tx, t, first.start!.conversationId));
+    expect(thread.map((m) => m.message.role)).toEqual(["user", "assistant", "user", "assistant", "user", "assistant"]);
+    expect(thread[3]!.citations[0]!.documentId).toBe(plans.id);
+  });
+
+  it("uses at most RAG_HISTORY_TURNS earlier turns", async () => {
+    const t = await tenant("follow-up-limit");
+    await upload(t, "orchard-plans.txt", new TextEncoder().encode("Orchard Pro includes priority support and a dedicated account manager."));
+    const requests: string[] = [];
+    const recording: ChatModelProvider = {
+      descriptor: new DeterministicChatModel().descriptor,
+      async *streamAnswer(request, signal) {
+        requests.push(request.user);
+        yield* new DeterministicChatModel().streamAnswer(request, signal);
+      },
+    };
+    const custom = { chat: recording, config: parseConfig({ ...baseEnv, RAG_HISTORY_TURNS: "2" }) };
+    const first = await ask(t, "First: what does Orchard Pro include?", custom);
+    const conversationId = first.start!.conversationId;
+    await ask(t, "Second: what does Orchard Pro include?", custom, { conversationId });
+    await ask(t, "Third: what does Orchard Pro include?", custom, { conversationId });
+    await ask(t, "Fourth: what does Orchard Pro include?", custom, { conversationId });
+    const last = requests.at(-1)!;
+    expect(last).not.toContain("First:");
+    expect(last).toContain("Second:");
+    expect(last).toContain("Third:");
+  });
 });
 
 describe("deletion", () => {
