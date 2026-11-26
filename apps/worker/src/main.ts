@@ -1,6 +1,8 @@
 /** Ingestion worker process: consumes the BullMQ queue and indexes uploaded documents. */
 import { createChatModel, createEmbeddingsProvider, createPageReader } from "@hks/ai";
-import { createIngestionWorker, createStorage } from "@hks/core";
+import os from "node:os";
+import path from "node:path";
+import { createIngestionWorker, createRedis, createStorage, startHeartbeat } from "@hks/core";
 import { createDatabase } from "@hks/database";
 import { getConfig, log } from "@hks/shared";
 
@@ -22,7 +24,18 @@ const worker = createIngestionWorker(
 );
 log("info", "worker.started", { embeddings: embeddings.descriptor.provider, kind: embeddings.descriptor.kind, scannedPages: config.OCR_PROVIDER });
 
+// Alive means: the queue consumer is running and Redis answers. The probe has a connection of
+// its own, because the queue library keeps its connection to itself.
+const probe = createRedis(config.REDIS_URL);
+probe.on("error", () => {}); // a lost connection shows as a missed heartbeat
+const heartbeat = startHeartbeat({
+  file: config.WORKER_HEARTBEAT_FILE ?? path.join(os.tmpdir(), "hks-worker-heartbeat"),
+  alive: async () => worker.isRunning() && (await probe.ping()) === "PONG",
+});
+
 const shutdown = async () => {
+  heartbeat.stop();
+  probe.disconnect();
   await worker.close();
   await database.close();
   process.exit(0);

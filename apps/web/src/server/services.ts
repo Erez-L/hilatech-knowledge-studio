@@ -20,6 +20,8 @@ export type ServerServices = Services & {
   mailer: Mailer | null;
   /** Sign-ups waiting for their email address to be confirmed. Redis only; see @hks/core registration. */
   pendingRegistrations: PendingRegistrations;
+  /** Resolves when Redis answers; for the health endpoint. */
+  pingRedis: () => Promise<void>;
 };
 
 // One set of connections per server process (and per dev-server reload).
@@ -49,6 +51,9 @@ export function getServices(): ServerServices {
     limiter: new RedisRateLimiter(redis),
     mailer: createMailer(config),
     pendingRegistrations: new PendingRegistrations(redis),
+    pingRedis: async () => {
+      await redis.ping();
+    },
   };
   return holder.__hksServices;
 }

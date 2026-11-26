@@ -8,3 +8,4 @@ export * from "./rate-limit.ts";
 export * from "./budget.ts";
 export * from "./registration.ts";
 export * from "./summarize.ts";
+export * from "./health.ts";
