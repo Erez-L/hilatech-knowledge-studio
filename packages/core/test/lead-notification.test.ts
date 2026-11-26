@@ -23,20 +23,20 @@ const recorder = () => {
 describe("contact-form notification to the owner", () => {
   it("carries everything the visitor wrote, to the configured address, with the visitor as Reply-To", () => {
     const message = buildLeadNotification(lead, OWNER);
-    expect(message).toMatchObject({ to: OWNER, kind: "lead_notification", replyTo: "dana@customer.example", subject: "New contact request: Dana Levi (Levi Logistics)" });
-    for (const part of ["Name: Dana Levi", "Email: dana@customer.example", "Company: Levi Logistics", "Language of the site: Hebrew", "Received: 2026-11-26T10:00:00.000Z", lead.requestId]) {
+    expect(message).toMatchObject({ to: OWNER, kind: "lead_notification", replyTo: "dana@customer.example", subject: "פנייה חדשה מהאתר: Dana Levi (Levi Logistics)" });
+    for (const part of ["שם: Dana Levi", "אימייל: dana@customer.example", "חברה: Levi Logistics", "שפת האתר: עברית", "התקבלה: 2026-11-26T10:00:00.000Z", lead.requestId]) {
       expect(message.text).toContain(part);
     }
     expect(message.text).toContain("We have 400 procedure documents.\nCan the team search them in Hebrew?");
-    expect(buildLeadNotification({ ...lead, company: "" }, OWNER)).toMatchObject({ subject: "New contact request: Dana Levi" });
-    expect(buildLeadNotification({ ...lead, company: null }, OWNER).text).toContain("Company: (not given)");
+    expect(buildLeadNotification({ ...lead, company: "" }, OWNER)).toMatchObject({ subject: "פנייה חדשה מהאתר: Dana Levi" });
+    expect(buildLeadNotification({ ...lead, company: null }, OWNER).text).toContain("חברה: (לא צוינה)");
   });
 
   it("keeps typed line breaks out of the subject and the header-like lines", () => {
     const message = buildLeadNotification({ ...lead, name: "Eve\r\nBcc: victim@example.test", company: "X\nSubject: other" }, OWNER);
-    expect(message.subject).toBe("New contact request: Eve Bcc: victim@example.test (X Subject: other)");
+    expect(message.subject).toBe("פנייה חדשה מהאתר: Eve Bcc: victim@example.test (X Subject: other)");
     expect(message.subject).not.toMatch(/[\r\n]/);
-    expect(message.text).toContain("Name: Eve Bcc: victim@example.test\n");
+    expect(message.text).toContain("שם: Eve Bcc: victim@example.test\n");
     expect(buildLeadNotification({ ...lead, name: "n".repeat(500) }, OWNER).subject.length).toBeLessThanOrEqual(200);
   });
 

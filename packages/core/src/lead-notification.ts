@@ -16,31 +16,31 @@ export type LeadForNotification = {
 const oneLine = (text: string, max: number) => text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, max);
 
 /**
- * The message that tells the owner a contact-form request arrived. Plain text only. Replying
+ * The message that tells the owner a contact-form request arrived. Plain text only, in Hebrew (the owner reads Hebrew). Replying
  * to it answers the person who wrote, because their address is the Reply-To.
  */
 export function buildLeadNotification(lead: LeadForNotification, to: string): MailMessage {
   const name = oneLine(lead.name, 120);
   const company = oneLine(lead.company ?? "", 160);
   const text = [
-    "A new request arrived from the contact form of HilaTech Knowledge Studio.",
+    "פנייה חדשה הגיעה מטופס יצירת הקשר של HilaTech Knowledge Studio.",
     "",
-    `Name: ${name}`,
-    `Email: ${oneLine(lead.email, 254)}`,
-    `Company: ${company || "(not given)"}`,
-    `Language of the site: ${lead.locale === "he" ? "Hebrew" : "English"}`,
-    `Received: ${oneLine(lead.receivedAt, 40)}`,
-    `Reference: ${oneLine(lead.requestId, 64)}`,
+    `שם: ${name}`,
+    `אימייל: ${oneLine(lead.email, 254)}`,
+    `חברה: ${company || "(לא צוינה)"}`,
+    `שפת האתר: ${lead.locale === "he" ? "עברית" : "אנגלית"}`,
+    `התקבלה: ${oneLine(lead.receivedAt, 40)}`,
+    `מספר פנייה: ${oneLine(lead.requestId, 64)}`,
     "",
-    "Message:",
+    "ההודעה:",
     lead.message.replace(/\r\n?/g, "\n").trim(),
     "",
-    "Reply to this message to answer the sender. The request is also saved in the contact_leads table.",
+    "כדי לענות לפונה, השיבו למייל הזה. הפנייה שמורה גם בטבלה contact_leads.",
   ].join("\n");
   return {
     to,
     kind: "lead_notification",
-    subject: oneLine(`New contact request: ${name}${company ? ` (${company})` : ""}`, 200),
+    subject: oneLine(`פנייה חדשה מהאתר: ${name}${company ? ` (${company})` : ""}`, 200),
     text,
     replyTo: oneLine(lead.email, 254),
   };
