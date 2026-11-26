@@ -90,17 +90,31 @@ export async function lastLink(to: string, kind: string): Promise<string> {
   throw new Error(`no ${kind} message for ${to}`);
 }
 
-/** Registers a user, follows the verification link, and returns a signed-in client. */
+/**
+ * Step one of sign-up (server/registration.ts): the form is posted and a confirmation link is
+ * mailed. No account exists yet. The server answers 202 for any valid form.
+ */
+export const startSignUp = (client: Client, form: { name: string; email: string; password?: string; locale?: "en" | "he" }) =>
+  client.post("/api/v1/auth/register", { name: form.name, email: form.email, password: form.password ?? PASSWORD, locale: form.locale ?? "en" });
+
+/** The one-time token inside the confirmation link that was mailed to an address. */
+export async function signUpToken(email: string): Promise<string> {
+  const token = new URL(await lastLink(email, "verify_email")).searchParams.get("token");
+  if (!token) throw new Error(`the confirmation link for ${email} has no token`);
+  return token;
+}
+
+/** Step two of sign-up: what the confirmation page does when its button is pressed. Creates the account. */
+export const confirmSignUp = async (client: Client, email: string) => client.post("/api/v1/auth/verify", { token: await signUpToken(email) });
+
+/** Registers a user, confirms the address, and returns a signed-in client. */
 export async function register(name = "user", locale: "en" | "he" = "en") {
   const client = new Client();
   const email = `${name}-${Date.now()}-${userCounter++}@example.test`;
-  const signUp = await client.post("/api/auth/sign-up/email", { name, email, password: PASSWORD, locale });
-  if (!signUp.ok) throw new Error(`sign-up failed: ${signUp.status} ${await signUp.text()}`);
-  const link = await lastLink(email, "verify_email");
-  const verified = await client.get(link.replace(BASE, ""));
-  if (verified.status >= 400 || /error=/.test(verified.headers.get("location") ?? "")) {
-    throw new Error(`verification failed: ${verified.status} ${verified.headers.get("location") ?? (await verified.text())}`);
-  }
+  const signUp = await startSignUp(client, { name, email, locale });
+  if (signUp.status !== 202) throw new Error(`sign-up failed: ${signUp.status} ${await signUp.text()}`);
+  const verified = await confirmSignUp(client, email);
+  if (verified.status !== 201) throw new Error(`confirmation failed: ${verified.status} ${await verified.text()}`);
   const signIn = await client.post("/api/auth/sign-in/email", { email, password: PASSWORD });
   if (!signIn.ok) throw new Error(`sign-in failed: ${signIn.status} ${await signIn.text()}`);
   const me = await client.getJson("/api/v1/me");

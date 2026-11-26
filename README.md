@@ -38,6 +38,8 @@ bash scripts/http-tests.sh           # 58 tests over HTTP: auth, authorization, 
 bash scripts/ui-checks.sh            # 75 browser checks with screenshots into artifacts/screenshots/app
 ```
 
+The part of the tests that needs no services runs with `pnpm test:unit`. GitHub Actions runs it with the typecheck and the lint for every pull request (`.github/workflows/ci.yml`), and again before an image is built. The suites above that need PostgreSQL and Redis are not part of that workflow yet.
+
 Checks of the landing page and the scripted preview (need a server on port 3100):
 
 ```bash

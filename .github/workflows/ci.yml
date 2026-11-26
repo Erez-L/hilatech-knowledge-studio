@@ -1,0 +1,35 @@
+name: CI
+# Checks that need no database: install, typecheck, lint and the unit tests that run without
+# PostgreSQL or Redis. Runs for every pull request and for pushes to the working branches.
+# "Build image" calls this workflow first, so an image is only published from code that passes.
+#
+# Not run here yet: the suites that need PostgreSQL with pgvector and Redis
+# (packages/core/test/pipeline.test.ts, registration.test.ts, packages/database/test and
+# apps/web/test/http). Those still have to be run by hand before a release.
+on:
+  pull_request:
+  push:
+    branches: [main, milestone-2-rag-foundation]
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # The pnpm version comes from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: Unit tests that need no database
+        run: pnpm test:unit

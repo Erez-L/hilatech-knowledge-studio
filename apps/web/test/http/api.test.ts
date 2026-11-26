@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { BASE, Client, lastLink, outbox, ownerQuery, PASSWORD, register, waitForDocument } from "./client.ts";
+import { BASE, Client, confirmSignUp, lastLink, outbox, ownerQuery, PASSWORD, register, startSignUp, waitForDocument } from "./client.ts";
 
 /**
  * Real HTTP against a running server (see scripts/http-tests.sh).
@@ -34,32 +34,44 @@ describe("authentication", () => {
     expect(alice.me.user.email).toBe(alice.email);
   });
 
-  it("requires email verification before the first sign-in", async () => {
+  it("creates no account until the email address is confirmed", async () => {
     const client = new Client();
     const email = `unverified-${Date.now()}@example.test`;
-    expect((await client.post("/api/auth/sign-up/email", { name: "u", email, password: PASSWORD })).ok).toBe(true);
+    expect((await startSignUp(client, { name: "u", email })).status).toBe(202);
     expect((await client.get("/api/v1/me")).status).toBe(401);
+    // Nothing is written before confirmation, so signing in fails like any unknown address.
+    expect((await ownerQuery("select count(*)::int as n from users where email = $1", [email]))[0].n).toBe(0);
     const denied = await client.post("/api/auth/sign-in/email", { email, password: PASSWORD });
-    expect(denied.status).toBe(403);
+    expect(denied.status).toBe(401);
     const message = (await outbox()).find((m) => m.to === email)!;
     expect(message).toMatchObject({ kind: "verify_email", subject: "Confirm your email address" });
-    await client.get((await lastLink(email, "verify_email")).replace(BASE, ""));
+    expect(await lastLink(email, "verify_email")).toContain(`${BASE}/en/verify-email?token=`);
+    expect((await confirmSignUp(client, email)).status).toBe(201);
     expect((await client.post("/api/auth/sign-in/email", { email, password: PASSWORD })).ok).toBe(true);
     expect((await client.get("/api/v1/me")).status).toBe(200);
+    // The link works once.
+    expect((await confirmSignUp(new Client(), email)).status).toBe(404);
+  });
+
+  it("keeps the auth library's own sign-up endpoint closed", async () => {
+    const email = `direct-${Date.now()}@example.test`;
+    const direct = await new Client().post("/api/auth/sign-up/email", { name: "d", email, password: PASSWORD });
+    expect(direct.ok).toBe(false);
+    expect((await ownerQuery("select count(*)::int as n from users where email = $1", [email]))[0].n).toBe(0);
   });
 
   it("sends Hebrew email to a user who registered in Hebrew", async () => {
     const client = new Client();
     const email = `he-${Date.now()}@example.test`;
-    await client.post("/api/auth/sign-up/email", { name: "דנה", email, password: PASSWORD, locale: "he" });
+    await startSignUp(client, { name: "דנה", email, locale: "he" });
     await lastLink(email, "verify_email");
     expect((await outbox()).find((m) => m.to === email)!.subject).toBe("אישור כתובת האימייל שלך");
   });
 
   it("rejects weak passwords and does not reveal whether an email is registered", async () => {
     const client = new Client();
-    const weak = await client.post("/api/auth/sign-up/email", { name: "w", email: `weak-${Date.now()}@example.test`, password: "short" });
-    expect(weak.status).toBe(400);
+    const weak = await startSignUp(client, { name: "w", email: `weak-${Date.now()}@example.test`, password: "short" });
+    expect(weak.status).toBe(422);
     const wrongPassword = await client.post("/api/auth/sign-in/email", { email: alice.email, password: "definitely wrong password" });
     const unknownUser = await client.post("/api/auth/sign-in/email", { email: `nobody-${Date.now()}@example.test`, password: "definitely wrong password" });
     expect(wrongPassword.status).toBe(401);
@@ -67,8 +79,8 @@ describe("authentication", () => {
     expect((await wrongPassword.json()).code).toBe((await unknownUser.json()).code);
     // Registering an existing address answers like a new one and creates nothing.
     const before = (await ownerQuery("select count(*)::int as n from users where email = $1", [alice.email]))[0].n;
-    const again = await new Client().post("/api/auth/sign-up/email", { name: "x", email: alice.email, password: PASSWORD });
-    expect(again.status).toBe(200);
+    const again = await startSignUp(new Client(), { name: "x", email: alice.email });
+    expect(again.status).toBe(202);
     expect((await ownerQuery("select count(*)::int as n from users where email = $1", [alice.email]))[0].n).toBe(before);
   });
 

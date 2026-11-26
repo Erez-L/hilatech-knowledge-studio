@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r typecheck",
     "qa:visual": "pnpm --filter @hks/web qa:visual",
     "test": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.mts",
     "test:live": "vitest run --config vitest.live.config.mts",
     "db:migrate": "pnpm --filter @hks/database migrate",
     "services:start": "bash scripts/dev-services.sh start",
