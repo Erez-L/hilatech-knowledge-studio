@@ -75,10 +75,6 @@ export function HowItWorks() {
   return (
     <section id="how-it-works" className="page-container py-(--space-section)">
       <h2 className="type-h2 max-w-[22ch]">{t("title")}</h2>
-      <p className="mt-6 flex max-w-[44rem] items-start gap-2.5 text-small leading-relaxed text-secondary">
-        <span aria-hidden className="mt-[0.45em] size-2 shrink-0 rounded-full bg-accent ring-1 ring-foreground/30" />
-        {t("status")}
-      </p>
       <ol className="mt-14 grid gap-y-14 lg:grid-cols-3">
         {steps.map((step, index) => (
           <li
