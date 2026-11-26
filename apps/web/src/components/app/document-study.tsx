@@ -132,7 +132,12 @@ export function DocumentStudy({ documentId }: { documentId: string }) {
             {summary ? (
               <>
                 {summary.pipelineMode === "sample" ? <p className="mt-3 text-label font-semibold text-tertiary">{t("sample")}</p> : null}
-                <p className="mt-3 text-small leading-relaxed" dir="auto">{summary.content.overview}</p>
+                {/* The overview is the model's own wording; unlike the points, nothing ties it to the text. */}
+                <section aria-labelledby="summary-overview" className="mt-3 rounded-control border border-dashed border-border p-3">
+                  <h3 id="summary-overview" className="text-label font-semibold text-tertiary">{t("overviewLabel")}</h3>
+                  <p className="mt-1.5 text-small leading-relaxed" dir="auto">{summary.content.overview}</p>
+                  <p className="mt-2 text-label leading-relaxed text-tertiary">{t("overviewUnverified")}</p>
+                </section>
                 <ol className="mt-4 flex flex-col gap-1.5">
                   {summary.content.points.map((point, index) => (
                     <li key={index}>
@@ -151,6 +156,12 @@ export function DocumentStudy({ documentId }: { documentId: string }) {
                     </li>
                   ))}
                 </ol>
+                {summary.content.rejectedPoints > 0 ? (
+                  <p className="mt-4 flex items-start gap-2 text-label leading-relaxed text-secondary">
+                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                    {t("omittedPoints", { count: summary.content.rejectedPoints })}
+                  </p>
+                ) : null}
                 <p className="mt-4 text-label leading-relaxed text-tertiary">
                   {t("note")}
                   {summary.content.rejectedQuotes > 0 ? ` ${t("rejected", { count: summary.content.rejectedQuotes })}` : ""}

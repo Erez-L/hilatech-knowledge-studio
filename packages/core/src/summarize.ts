@@ -1,4 +1,4 @@
-import { buildSummaryRequest, parseSummaryReply, type SummaryPassage } from "@hks/ai";
+import { buildSummaryRequest, describeRejections, leadingOverlap, parseSummaryReply, type SummaryPassage } from "@hks/ai";
 import {
   getDocument,
   getDocumentSummary,
@@ -28,9 +28,11 @@ export async function readSummary(services: Services, ctx: TenantContext, docume
  *
  * Unlike answering, nothing is retrieved: the model reads every passage of the document, so the
  * summary covers all of it. A document too long for one call is refused rather than cut short.
- * Every quote the model returns is located in the passage it names; a quote that is not there
- * word for word is dropped, and a point left without any quote is dropped with it. What is
- * saved can therefore always be shown as a highlight in the document's own text.
+ * Consecutive passages repeat a few sentences (the chunker's overlap); the model is sent each
+ * sentence once. Every quote the model returns is located in the document's text, first in the
+ * passage it names and then in the others; a quote that is nowhere word for word is dropped, and
+ * a point left without any quote is dropped with it. What is saved can therefore always be shown
+ * as a highlight in the document's own text. The overview is the one part that is not checked.
  */
 export async function summarizeDocument(
   services: Services,
@@ -52,7 +54,12 @@ export async function summarizeDocument(
   if (inputTokens > config.SUMMARY_MAX_INPUT_TOKENS) {
     throw new AppError("payload_too_large", "The document is too long to summarize in one pass");
   }
-  const passages: SummaryPassage[] = chunks.map((chunk, i) => ({ label: `P${i + 1}`, location: locationOf(chunk), text: chunk.text }));
+  const passages: SummaryPassage[] = chunks.map((chunk, i) => ({
+    label: `P${i + 1}`,
+    location: locationOf(chunk),
+    text: chunk.text,
+    overlap: i > 0 ? leadingOverlap(chunks[i - 1]!.text, chunk.text) : 0,
+  }));
   const chunkIdOf = new Map(chunks.map((chunk, i) => [`P${i + 1}`, chunk.id]));
   const request = buildSummaryRequest({ title: loaded.document.title, passages, language: input.locale, maxOutputTokens: config.SUMMARY_MAX_OUTPUT_TOKENS });
 
@@ -83,8 +90,11 @@ export async function summarizeDocument(
 
   if (stopReason === "max_tokens") throw new AppError("provider_error", "The summary was cut off before it was complete");
   const draft = parseSummaryReply(reply, passages);
+  if (draft && draft.rejections.length > 0) {
+    log("warn", "summary.rejections", { documentId: input.documentId, passages: passages.length, ...describeRejections(draft), correlationId: input.correlationId });
+  }
   if (!draft || draft.points.length === 0) {
-    log("warn", "summary.unusable", { documentId: input.documentId, parsed: Boolean(draft), correlationId: input.correlationId });
+    log("warn", "summary.unusable", { documentId: input.documentId, parsed: Boolean(draft), replyChars: reply.length, stopReason, correlationId: input.correlationId });
     throw new AppError("provider_error", "No summary point could be matched to the document's text");
   }
   const content: StoredSummary = {
@@ -104,6 +114,9 @@ export async function summarizeDocument(
       providerKind: chat.descriptor.kind, content, createdByUserId: input.userId,
     });
   });
-  log("info", "summary.saved", { documentId: input.documentId, points: content.points.length, rejectedQuotes: content.rejectedQuotes, correlationId: input.correlationId });
+  log("info", "summary.saved", {
+    documentId: input.documentId, points: content.points.length, rejectedQuotes: content.rejectedQuotes, rejectedPoints: content.rejectedPoints,
+    relocatedQuotes: draft.relocatedQuotes, correlationId: input.correlationId,
+  });
   return { locale: row.locale, createdAt: row.createdAt, pipelineMode: row.providerKind === "live" ? "live" : "sample", content: row.content };
 }

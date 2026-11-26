@@ -37,6 +37,11 @@ export type ChatRequest = {
   /** The user turn: the question plus the evidence block (documents are untrusted data). */
   user: string;
   maxOutputTokens: number;
+  /**
+   * Sampling temperature, for requests that need the most literal output (0 for copying text
+   * exactly). Left out, the model's default applies. Sent by the Bedrock provider only.
+   */
+  temperature?: number;
 };
 
 export type ChatEvent =
