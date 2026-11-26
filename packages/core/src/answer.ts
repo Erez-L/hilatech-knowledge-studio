@@ -190,7 +190,9 @@ async function* answerWithinBudget(
       const search = { embeddingIndexId: index.id, topK: config.RAG_TOP_K, documentIds: input.documentIds };
       const primary = await searchChunks(tx, ctx, { ...search, queryVector: queryVector! });
       if (!contextVector) return primary;
-      return mergeRetrieval(primary, await searchChunks(tx, ctx, { ...search, queryVector: contextVector }), config.RAG_TOP_K);
+      // A question that finds good evidence by itself keeps its own passages first (a new subject).
+      const standsAlone = (primary[0]?.similarity ?? -1) >= config.RAG_EVIDENCE_MIN_SIMILARITY;
+      return mergeRetrieval(primary, await searchChunks(tx, ctx, { ...search, queryVector: contextVector }), config.RAG_TOP_K, standsAlone);
     });
   } catch (error) {
     log("error", "answer.retrieval_failed", { correlationId: input.correlationId, code: isAppError(error) ? error.code : "internal" });

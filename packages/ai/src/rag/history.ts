@@ -73,27 +73,30 @@ export function pairTurns(
 }
 
 /**
- * Ranks the passages of the two retrieval queries together. A passage found by both keeps its
- * best similarity. The history query's scores are discounted for ranking, so when the user
- * changes the subject the passages for the new question come first; when the new question
- * names nothing on its own, the history query's passages still rise to the top.
+ * Ranks the passages of the two retrieval queries together; each passage appears once, with its
+ * best similarity.
+ *
+ * - When the new question finds good evidence on its own (`standsAlone`), its passages keep their
+ *   order and come first; passages found only through the earlier questions follow. A change of
+ *   subject therefore answers the new subject, with the earlier one only as extra context.
+ * - When it does not (a follow-up such as "and the second one?" names nothing), both lists are
+ *   ranked together by similarity, so the earlier subject's passages can lead.
  */
-export const HISTORY_RANK_WEIGHT = 0.9;
-
-export function mergeRetrieval<T extends { chunkId: string; similarity: number }>(primary: T[], fromHistory: T[], topK: number): T[] {
-  const best = new Map<string, { chunk: T; rank: number }>();
-  const consider = (chunk: T, rank: number) => {
+export function mergeRetrieval<T extends { chunkId: string; similarity: number }>(
+  primary: T[],
+  fromHistory: T[],
+  topK: number,
+  standsAlone: boolean,
+): T[] {
+  const best = new Map<string, T>();
+  for (const chunk of [...primary, ...fromHistory]) {
     const seen = best.get(chunk.chunkId);
-    if (!seen) best.set(chunk.chunkId, { chunk, rank });
-    else {
-      if (chunk.similarity > seen.chunk.similarity) seen.chunk = chunk;
-      seen.rank = Math.max(seen.rank, rank);
-    }
-  };
-  for (const chunk of primary) consider(chunk, chunk.similarity);
-  for (const chunk of fromHistory) consider(chunk, chunk.similarity * HISTORY_RANK_WEIGHT);
-  return [...best.values()]
-    .sort((x, y) => y.rank - x.rank || y.chunk.similarity - x.chunk.similarity)
-    .slice(0, topK)
-    .map((entry) => entry.chunk);
+    if (!seen || chunk.similarity > seen.similarity) best.set(chunk.chunkId, chunk);
+  }
+  const bySimilarity = (x: T, y: T) => y.similarity - x.similarity;
+  if (!standsAlone) return [...best.values()].sort(bySimilarity).slice(0, topK);
+  const own = new Set(primary.map((chunk) => chunk.chunkId));
+  const first = primary.map((chunk) => best.get(chunk.chunkId)!);
+  const extra = [...best.values()].filter((chunk) => !own.has(chunk.chunkId)).sort(bySimilarity);
+  return [...first, ...extra].slice(0, topK);
 }

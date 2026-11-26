@@ -68,17 +68,17 @@ describe("follow-up questions", () => {
     expect(cosine(withHistory!, plans!)).toBeGreaterThan(cosine(withHistory!, holiday!));
   });
 
-  it("ranks the new question's passages first and keeps each passage once", () => {
+  it("keeps a self-sufficient question's own passages first, and lets the earlier subject lead a vague follow-up", () => {
     const primary = [{ chunkId: "a", similarity: 0.5 }, { chunkId: "b", similarity: 0.3 }];
-    const fromHistory = [{ chunkId: "c", similarity: 0.52 }, { chunkId: "b", similarity: 0.45 }];
-    const merged = mergeRetrieval(primary, fromHistory, 3);
-    // c scores 0.468 after the history discount, so the new question's own best passage stays first.
-    expect(merged.map((c) => c.chunkId)).toEqual(["a", "c", "b"]);
-    // A passage found by both keeps its best similarity.
-    expect(merged.find((c) => c.chunkId === "b")!.similarity).toBe(0.45);
-    expect(mergeRetrieval(primary, fromHistory, 1)).toHaveLength(1);
-    // A vague follow-up: the history query's passages rise to the top.
-    expect(mergeRetrieval([{ chunkId: "x", similarity: 0.1 }], [{ chunkId: "y", similarity: 0.6 }], 2).map((c) => c.chunkId)).toEqual(["y", "x"]);
+    const fromHistory = [{ chunkId: "c", similarity: 0.7 }, { chunkId: "b", similarity: 0.45 }];
+    // A new subject: its own passages first, in their order, even though c scored higher.
+    const alone = mergeRetrieval(primary, fromHistory, 3, true);
+    expect(alone.map((c) => c.chunkId)).toEqual(["a", "b", "c"]);
+    // A passage found by both appears once, with its best similarity.
+    expect(alone.find((c) => c.chunkId === "b")!.similarity).toBe(0.45);
+    expect(mergeRetrieval(primary, fromHistory, 1, true).map((c) => c.chunkId)).toEqual(["a"]);
+    // A vague follow-up: ranked together, so the earlier subject's passage leads.
+    expect(mergeRetrieval(primary, fromHistory, 3, false).map((c) => c.chunkId)).toEqual(["c", "a", "b"]);
   });
 
   it("gives the model a short, escaped transcript that cannot be cited or forge a source", async () => {
