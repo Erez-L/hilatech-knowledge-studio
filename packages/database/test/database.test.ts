@@ -140,6 +140,41 @@ describe("migrations", () => {
   });
 });
 
+describe("row-level security (owner role)", () => {
+  it("applies to the table owner too: nothing without a tenant, only that tenant's rows with one", async () => {
+    await readyDocument(a, "rls-owner-probe", [chunk(0, "owner probe", vectorAlong(901))]);
+    const client = new pg.Client({ connectionString: OWNER_URL });
+    await client.connect();
+    try {
+      expect((await client.query("select count(*)::int as n from documents")).rows[0]).toEqual({ n: 0 });
+      expect((await client.query("select count(*)::int as n from document_chunks")).rows[0]).toEqual({ n: 0 });
+      await client.query("begin");
+      await client.query("select set_config('app.organization_id', $1, true)", [b.organizationId]);
+      const seenByB = await client.query("select title from documents");
+      expect(seenByB.rows.some((row) => row.title === "rls-owner-probe")).toBe(false);
+      await client.query("commit");
+      const forced = await client.query(
+        "select relname from pg_class where relrowsecurity and not relforcerowsecurity and relnamespace = 'public'::regnamespace",
+      );
+      expect(forced.rows, "every table with row level security forces it").toEqual([]);
+    } finally {
+      await client.end();
+    }
+  });
+});
+
+describe("active organization", () => {
+  it("lists a user's organizations in the order they joined, so the default one is stable", async () => {
+    const user = await createUser(database.db, { email: `order-${randomUUID()}@example.test`, name: "order", passwordHash: "x", locale: "en" });
+    const first = await createOrganizationWithOwner(database.db, { name: "first", slug: `first-${randomUUID().slice(0, 8)}`, ownerUserId: user!.id });
+    const second = await createOrganizationWithOwner(database.db, { name: "second", slug: `second-${randomUUID().slice(0, 8)}`, ownerUserId: user!.id });
+    for (let i = 0; i < 3; i++) {
+      const list = await listMemberships(database.db, user!.id);
+      expect(list.map((m) => m.organizationId)).toEqual([first.organization.id, second.organization.id]);
+    }
+  });
+});
+
 describe("row-level security (application role)", () => {
   it("returns nothing when no tenant is set", async () => {
     await readyDocument(a, "rls-probe", [chunk(0, "alpha only", vectorAlong(900))]);

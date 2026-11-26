@@ -295,3 +295,12 @@ Security controls are considered unverified until the following have been run an
 7. Header and CSP check in a browser, with no console violations on the main screens.
 8. Review of public and demo endpoints for information exposure.
 9. Dependency audit and secret scan.
+
+## Response headers of the application pages
+
+Set in `apps/web/next.config.ts` from `apps/web/src/lib/security-headers.ts`, for every path except `/api/` (route handlers set their own; the original-file download has a sandboxing policy of its own):
+
+- `Content-Security-Policy`: `default-src 'self'`, scripts, styles, fonts, images and connections from this origin only, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`.
+- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and a `Permissions-Policy` that turns off camera, microphone, geolocation and payment.
+
+`script-src` includes `'unsafe-inline'` because the Next.js App Router delivers its page data and bootstrap as inline scripts. Nonces would remove that need, but they require rendering every page dynamically and were not verified against a production build; this is a known limit of the policy, which still blocks scripts from any other origin. A unit test pins the policy, and the HTTP suite checks that a production page carries it.

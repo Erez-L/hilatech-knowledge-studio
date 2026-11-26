@@ -5,6 +5,7 @@ import { isUuid, recordAudit } from "@hks/database";
 import { AppError, getConfig, isAppError, log } from "@hks/shared";
 import { clientIp } from "@/lib/client-ip";
 import { getServices } from "./services";
+import { MAX_API_BODY_BYTES } from "./body";
 
 export type ApiError = { error: { code: string; message: string; requestId: string } };
 
@@ -38,7 +39,12 @@ export function route<P = Record<string, never>>(handler: Handler<P>) {
   return async (request: Request, segment: { params: Promise<P> }): Promise<Response> => {
     const requestId = randomUUID();
     try {
-      if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) assertSameOrigin(request);
+      if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+        assertSameOrigin(request);
+        // Small JSON bodies everywhere except the upload, which checks its own, larger limit.
+        const declared = Number(request.headers.get("content-length") ?? "0");
+        if (declared > MAX_API_BODY_BYTES && new URL(request.url).pathname !== "/api/v1/documents") throw new AppError("payload_too_large");
+      }
       return await handler({ request, params: await segment.params, requestId });
     } catch (error) {
       if (isAppError(error) && error.code === "rate_limited") {
