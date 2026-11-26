@@ -1,11 +1,15 @@
 name: CI
-# Checks that need no database: install, typecheck, lint and the unit tests that run without
-# PostgreSQL or Redis. Runs for every pull request and for pushes to the working branches.
-# "Build image" calls this workflow first, so an image is only published from code that passes.
+# Runs for every pull request and for pushes to the working branches. "Build image" calls this
+# workflow first, so an image is only published when every job here passes.
 #
-# Not run here yet: the suites that need PostgreSQL with pgvector and Redis
-# (packages/core/test/pipeline.test.ts, registration.test.ts, packages/database/test and
-# apps/web/test/http). Those still have to be run by hand before a release.
+#   checks    install, typecheck, lint and the unit tests that need no database
+#   database  the suites that need PostgreSQL with pgvector and Redis: the ingestion and answer
+#             pipeline, registration, and the database rules (tenancy, row level security)
+#   http      the HTTP suite against a production build of the web app and the worker
+#
+# The database and HTTP jobs use throwaway service containers with the development credentials
+# from infrastructure/postgres-init.sql. No secret is used, and the AI providers are the
+# deterministic test doubles (APP_ENV=test), so no paid service is called.
 on:
   pull_request:
   push:
@@ -33,3 +37,70 @@ jobs:
       - run: pnpm lint
       - name: Unit tests that need no database
         run: pnpm test:unit
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create the owner and application roles and the test database
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f infrastructure/postgres-init.sql
+      # vitest.config.mts points at hks_test on localhost:5432 and Redis on localhost:6380.
+      - name: Pipeline, registration and database suites
+        run: pnpm exec vitest run packages/database/test packages/core/test/pipeline.test.ts packages/core/test/registration.test.ts
+
+  http:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install the Redis command line client (used by the test script)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq redis-tools
+      - name: Create the owner and application roles and the test database
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -f infrastructure/postgres-init.sql
+      # Builds the web app, resets the test database, seeds the demo tenant, starts the server and
+      # the worker, and runs apps/web/test/http (see the script for the environment it sets).
+      - name: HTTP suite
+        run: bash scripts/http-tests.sh
