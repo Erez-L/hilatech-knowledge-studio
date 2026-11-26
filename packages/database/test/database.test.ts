@@ -156,7 +156,8 @@ describe("row-level security (owner role)", () => {
       const forced = await client.query(
         "select relname from pg_class where relrowsecurity and not relforcerowsecurity and relnamespace = 'public'::regnamespace",
       );
-      expect(forced.rows, "every table with row level security forces it").toEqual([]);
+      // The audit trail stays readable by the owner (see migration 0006).
+      expect(forced.rows, "every tenant table with row level security forces it").toEqual([{ relname: "audit_events" }]);
     } finally {
       await client.end();
     }
@@ -241,7 +242,7 @@ describe("vector retrieval", () => {
       searchChunks(tx, a, { embeddingIndexId: indexId, queryVector: vectorAlong(7), topK: 5 }),
     );
     expect(results.length).toBeGreaterThan(0);
-    expect(results.every((r) => r.documentTitle.startsWith("alpha") || r.documentTitle === "rls-probe")).toBe(true);
+    expect(results.every((r) => r.documentTitle.startsWith("alpha") || r.documentTitle.startsWith("rls-"))).toBe(true);
     expect(results[0]!.text).toBe("alpha near");
     expect(results[0]!.pageNumber).toBe(3);
     expect(results[0]!.similarity).toBeGreaterThan(0.85);

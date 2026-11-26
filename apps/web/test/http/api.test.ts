@@ -381,7 +381,7 @@ describe("roles inside one organization", () => {
     expect(created.status).toBe(201);
     const projectId = (await created.json()).project.id;
     expect((await member.client.post(`/api/v1/documents/${handbookId}/move`, { projectId })).status).toBe(403);
-    const audit = await ownerQuery("select outcome from audit_events where action = 'document.move' and actor_user_id = $1", [member.userId], { organizationId: alice.organizationId });
+    const audit = await ownerQuery("select outcome from audit_events where action = 'document.move' and actor_user_id = $1", [member.userId]);
     expect(audit).toEqual([{ outcome: "denied" }]);
     expect((await alice.client.getJson(`/api/v1/documents/${handbookId}`)).document.id).toBe(handbookId); // still in its project
     expect((await alice.client.request(`/api/v1/projects/${projectId}`, { method: "DELETE" })).status).toBe(200);
@@ -394,7 +394,7 @@ describe("roles inside one organization", () => {
     const denied = await member.client.request(`/api/v1/documents/${handbookId}`, { method: "DELETE" });
     expect(denied.status).toBe(403);
     expect((await member.client.request(`/api/v1/documents/${memberDocId}`, { method: "DELETE" })).status).toBe(200);
-    const audit = await ownerQuery("select outcome from audit_events where action = 'document.delete' and actor_user_id = $1", [member.userId], { organizationId: alice.organizationId });
+    const audit = await ownerQuery("select outcome from audit_events where action = 'document.delete' and actor_user_id = $1", [member.userId]);
     expect(audit).toEqual([{ outcome: "denied" }]);
   });
 
