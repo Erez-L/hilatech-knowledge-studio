@@ -123,13 +123,13 @@ check("search: no-results state", true);
 await page.getByRole("button", { name: "Clear search" }).click();
 await page.locator("[data-document-status]").nth(4).waitFor();
 
-await page.getByRole("button", { name: "Open Customer support handbook" }).click();
+await page.getByRole("button", { name: "View: Customer support handbook" }).click();
 const preview = page.getByRole("dialog");
 await preview.getByText("This handbook describes how the Northstar support team works").waitFor();
 check("preview: shows extracted text of page 1", await preview.getByText("Page 1 of 12").isVisible());
 await preview.getByRole("button", { name: "Next page" }).click();
 await preview.getByText("Page 2 of 12").waitFor();
-await preview.getByRole("tab", { name: "Page image" }).click();
+await preview.getByRole("button", { name: "Page image" }).click();
 await preview.locator("img").waitFor({ state: "visible" });
 await page.waitForFunction(() => { const i = document.querySelector("[role=dialog] img"); return i && i.complete && i.naturalWidth > 200; });
 check("preview: server-rendered page image loads", true);
@@ -160,7 +160,7 @@ check("citation: the cited passage is highlighted", (await region.locator("mark[
 await page.waitForTimeout(500);
 await shot(page, "app-answer-evidence-desktop");
 await axe("workspace with answer and evidence (en)", page);
-await region.getByRole("tab", { name: "Page image" }).click();
+await region.getByRole("button", { name: "Page image" }).click();
 await page.waitForFunction(() => { const i = document.querySelector("#evidence-region img"); return i && i.complete && i.naturalWidth > 200; });
 await page.waitForTimeout(300);
 await shot(page, "app-answer-page-image-desktop");
@@ -193,8 +193,8 @@ await shot(page, "library-delete-dialog-desktop");
 await axe("delete dialog (en)", page);
 await page.getByRole("button", { name: "Delete document" }).click();
 await page.getByText("Customer support handbook was deleted.").waitFor();
-await page.getByRole("button", { name: "Open Customer support handbook" }).first().waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
-check("delete: document removed after confirmation", (await page.getByRole("button", { name: "Open Customer support handbook" }).count()) === 0);
+await page.getByRole("button", { name: "View: Customer support handbook" }).first().waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
+check("delete: document removed after confirmation", (await page.getByRole("button", { name: "View: Customer support handbook" }).count()) === 0);
 await page.goto(conversationUrl, { waitUntil: "networkidle" });
 await page.locator("[data-answer-status='complete']").first().locator("button[aria-pressed]").first().click();
 await page.getByText("This source was removed").waitFor();
@@ -264,7 +264,7 @@ async function signIn(page, locale) {
   await page.waitForTimeout(500);
   await shot(page, "app-answer-evidence-hebrew-desktop");
   await axe("workspace with evidence (he)", page);
-  await page.locator("#evidence-region").getByRole("tab").nth(1).click();
+  await page.locator("#evidence-region").getByRole("button", { name: "Page image" }).click();
   await page.waitForFunction(() => { const i = document.querySelector("#evidence-region img"); return i && i.complete && i.naturalWidth > 200; });
   await page.waitForTimeout(300);
   await shot(page, "app-answer-page-image-hebrew-desktop");
@@ -345,7 +345,7 @@ for (const locale of ["en", "he"]) {
   check("demo: no original-file download is offered", (await page.locator("#evidence-region a[download], #evidence-region a[href*='/file']").count()) === 0);
   await shot(page, "demo-answer-evidence-desktop");
   await axe("demo with evidence (en)", page);
-  const pageTab = page.locator("#evidence-region").getByRole("tab", { name: /Page|Original/ }).first();
+  const pageTab = page.locator("#evidence-region").getByRole("button", { name: /Page|Original/ }).first();
   if (await pageTab.count()) {
     await pageTab.click();
     await page.waitForFunction(() => { const img = document.querySelector("#evidence-region img"); return img && img.complete && img.naturalWidth > 0; }, null, { timeout: 20000 }).catch(() => {});

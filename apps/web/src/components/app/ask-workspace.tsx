@@ -126,16 +126,38 @@ export function AskWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requested, sessionReady, handleAuthError, router, api, homePath]);
 
+  // A failed request is not an empty library: it gets its own state with a retry.
+  const [documentsFailed, setDocumentsFailed] = useState(false);
+  const [documentsAttempt, setDocumentsAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    api.documents("", controller.signal).then(setDocuments).catch(() => setDocuments([]));
+    api
+      .documents("", controller.signal)
+      .then((list) => {
+        setDocuments(list);
+        setDocumentsFailed(false);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted || handleAuthError(error)) return;
+        setDocumentsFailed(true);
+      });
     refreshUsage();
     return () => controller.abort();
-  }, [api, refreshUsage]);
+  }, [api, refreshUsage, handleAuthError, documentsAttempt]);
 
+  // Follow a streaming answer only while the reader is at (or near) the bottom. Someone who
+  // scrolled up to reread is left where they are; sending a question always goes to the end.
+  const followRef = useRef(true);
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (el) followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && messages.length) el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion ? "auto" : "smooth" });
+    if (!el || !messages.length || !followRef.current) return;
+    // Instant while text streams in: a smooth scroll restarted on every piece of text jitters.
+    const streaming = messages.some((m) => m.role === "assistant" && m.status === "streaming");
+    el.scrollTo({ top: el.scrollHeight, behavior: reduceMotion || streaming ? "auto" : "smooth" });
   }, [messages, reduceMotion]);
 
   const patch = (id: string, change: (message: Extract<UiMessage, { role: "assistant" }>) => Partial<Extract<UiMessage, { role: "assistant" }>>) =>
@@ -146,6 +168,7 @@ export function AskWorkspace() {
     const answerId = localId();
     const controller = new AbortController();
     abortRef.current = controller;
+    followRef.current = true;
     setMessages((current) => [
       ...current,
       { id: localId(), role: "user", content: question },
@@ -216,7 +239,7 @@ export function AskWorkspace() {
   );
 
   const ready = documents?.filter((d) => d.status === "ready") ?? [];
-  const processing = documents?.filter((d) => d.status === "queued" || d.status === "processing") ?? [];
+  const processing = documents?.filter((d) => ["queued", "processing", "uploaded", "pending_upload"].includes(d.status)) ?? [];
 
   return (
     <>
@@ -254,7 +277,7 @@ export function AskWorkspace() {
           </p>
         )}
 
-        <div ref={scrollRef} className="scroll-quiet flex min-h-0 flex-1 flex-col overflow-y-auto px-4 sm:px-8">
+        <div ref={scrollRef} onScroll={onScroll} className="scroll-quiet flex min-h-0 flex-1 flex-col overflow-y-auto px-4 sm:px-8">
           {loading ? (
             <div className="mx-auto flex w-full max-w-[46rem] flex-col gap-4 py-10" role="status" aria-label={t("evidence.loading")}>
               <span className="skeleton ms-auto h-12 w-3/5 rounded-panel" />
@@ -267,6 +290,8 @@ export function AskWorkspace() {
               ready={ready}
               processing={processing.length}
               loaded={documents !== null}
+              failed={documentsFailed && documents === null}
+              onReload={() => setDocumentsAttempt((n) => n + 1)}
               unconfigured={me !== null && !answering}
               demo={scope === "demo"}
               onAsk={send}
@@ -357,6 +382,8 @@ function EmptyState({
   ready,
   processing,
   loaded,
+  failed,
+  onReload,
   unconfigured,
   demo,
   onAsk,
@@ -364,6 +391,8 @@ function EmptyState({
   ready: DocumentView[];
   processing: number;
   loaded: boolean;
+  failed: boolean;
+  onReload: () => void;
   unconfigured: boolean;
   demo: boolean;
   onAsk: (question: string) => void;
@@ -393,7 +422,18 @@ function EmptyState({
         <p className="type-lead mt-3 max-w-[36rem]">{demo ? t("demo.emptyBody") : noDocuments ? t("empty.noDocsBody") : t("empty.body")}</p>
         {!demo ? <GuideSteps compact className="mt-8" /> : null}
 
-        {!loaded ? (
+        {failed ? (
+          <div role="alert" className="mt-8 flex flex-col items-start gap-3 rounded-panel border border-border-strong bg-surface p-5">
+            <p className="flex items-center gap-2.5 font-semibold">
+              <TriangleAlert className="size-5 shrink-0 text-warning" aria-hidden />
+              {t("empty.loadFailedTitle")}
+            </p>
+            <p className="text-small text-secondary">{t("empty.loadFailedBody")}</p>
+            <Button variant="outline" onClick={onReload}>
+              {t("empty.reload")}
+            </Button>
+          </div>
+        ) : !loaded ? (
           <div className="mt-10 flex flex-col gap-3" aria-hidden>
             <span className="skeleton h-4 w-40" />
             <span className="skeleton h-4 w-72" />

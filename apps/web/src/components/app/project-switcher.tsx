@@ -2,9 +2,10 @@
 
 import { Check, FolderPlus, Folders, Pencil, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
 import { ApiError } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useApp } from "./app-provider";
 
 /**
@@ -20,10 +21,13 @@ export function ProjectSwitcher() {
   const [editName, setEditName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ id: string; name: string } | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   if (!me || !projects) return null;
   const canManage = me.capabilities.manageProjects;
 
-  const run = async (work: () => Promise<void>) => {
+  /** `action` tells apart the two reasons for a conflict: too many projects, or a project that is not empty. */
+  const run = async (work: () => Promise<void>, action: "create" | "rename" | "delete") => {
     setBusy(true);
     setError(null);
     try {
@@ -31,10 +35,22 @@ export function ProjectSwitcher() {
     } catch (cause) {
       if (!handleAuthError(cause)) {
         const code = cause instanceof ApiError ? cause.code : "internal";
-        setError(t.has(`errors.${code}`) ? t(`errors.${code}`) : t("errors.internal"));
+        const key = code === "conflict" && action !== "rename" ? `errors.conflict_${action}` : `errors.${code}`;
+        setError(t.has(key) ? t(key) : t("errors.internal"));
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Escape closes the panel (or the rename field first) and returns focus to the button that opened it.
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape" || !open || confirm) return;
+    event.stopPropagation();
+    if (editing) setEditing(null);
+    else {
+      setOpen(false);
+      trigger.current?.focus();
     }
   };
 
@@ -45,7 +61,7 @@ export function ProjectSwitcher() {
     void run(async () => {
       const project = await api.createProject(clean);
       switchProject(project.id);
-    });
+    }, "create");
   };
 
   const rename = (event: FormEvent, id: string) => {
@@ -56,20 +72,25 @@ export function ProjectSwitcher() {
       await api.renameProject(id, clean);
       setEditing(null);
       await refreshProjects();
-    });
+    }, "rename");
   };
 
-  const remove = (id: string) =>
-    void run(async () => {
-      await api.deleteProject(id);
+  const remove = async () => {
+    if (!confirm) return;
+    await run(async () => {
+      await api.deleteProject(confirm.id);
       await refreshProjects();
-    });
+    }, "delete");
+    setConfirm(null);
+  };
 
   return (
-    <div className="px-4 pb-3">
+    <div className="px-4 pb-3" onKeyDown={onKeyDown}>
       <button
+        ref={trigger}
         type="button"
         aria-expanded={open}
+        aria-controls="project-panel"
         onClick={() => setOpen((value) => !value)}
         className="flex min-h-11 w-full items-center gap-3 rounded-control border border-border bg-surface px-3 text-start text-small font-semibold text-foreground hover:bg-hover"
       >
@@ -81,7 +102,7 @@ export function ProjectSwitcher() {
       </button>
 
       {open ? (
-        <div className="mt-2 rounded-control border border-border bg-surface p-2">
+        <div id="project-panel" className="mt-2 rounded-control border border-border bg-surface p-2">
           <ul className="flex flex-col gap-0.5">
             {projects.map((project) => {
               const current = project.id === me.project.id;
@@ -126,7 +147,7 @@ export function ProjectSwitcher() {
                               setEditing(project.id);
                               setEditName(project.name);
                             }}
-                            className="grid size-8 shrink-0 place-items-center rounded-control text-tertiary hover:bg-hover hover:text-foreground"
+                            className="grid size-10 shrink-0 place-items-center rounded-control text-tertiary hover:bg-hover hover:text-foreground"
                           >
                             <Pencil className="size-3.5" aria-hidden />
                           </button>
@@ -135,8 +156,8 @@ export function ProjectSwitcher() {
                               type="button"
                               disabled={busy}
                               aria-label={t("delete", { name: project.name })}
-                              onClick={() => remove(project.id)}
-                              className="grid size-8 shrink-0 place-items-center rounded-control text-tertiary hover:bg-hover hover:text-foreground"
+                              onClick={() => setConfirm({ id: project.id, name: project.name })}
+                              className="grid size-10 shrink-0 place-items-center rounded-control text-tertiary hover:bg-hover hover:text-danger"
                             >
                               <Trash2 className="size-3.5" aria-hidden />
                             </button>
@@ -175,6 +196,18 @@ export function ProjectSwitcher() {
           <p className="mt-2 px-1 text-label leading-relaxed text-tertiary">{t("hint")}</p>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirm !== null}
+        title={t("deleteTitle")}
+        body={confirm ? t("deleteBody", { name: confirm.name }) : ""}
+        confirmLabel={t("confirmDelete")}
+        cancelLabel={t("cancel")}
+        busyLabel={t("deleting")}
+        busy={busy}
+        danger
+        onConfirm={() => void remove()}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }
