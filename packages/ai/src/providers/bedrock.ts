@@ -45,7 +45,7 @@ export class BedrockChatModel implements ChatModelProvider {
           modelId: this.descriptor.modelId,
           system: [{ text: request.system }],
           messages: [{ role: "user", content: [{ text: request.user }] }],
-          inferenceConfig: { maxTokens: request.maxOutputTokens },
+          inferenceConfig: { maxTokens: request.maxOutputTokens, ...(request.temperature === undefined ? {} : { temperature: request.temperature }) },
         }),
         { abortSignal: signal },
       );

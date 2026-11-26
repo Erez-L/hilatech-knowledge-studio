@@ -16,6 +16,9 @@ import {
   buildSummaryRequest,
   locateQuote,
   parseSummaryReply,
+  leadingOverlap,
+  unescapeEntities,
+  describeRejections,
   chunkBlocks,
   CitationStreamFilter,
   EmbeddingInputTooLongError,
@@ -471,6 +474,16 @@ describe("provider adapters (stubbed clients — not a live verification)", () =
     expect(failure!.message).not.toContain("secret detail");
   });
 
+  it("Claude on Bedrock: sends a temperature only when the request sets one", async () => {
+    const sent: { inferenceConfig?: Record<string, unknown> }[] = [];
+    const client = { send: async (command: { input: { inferenceConfig?: Record<string, unknown> } }) => { sent.push(command.input); return { stream: (async function* () {})() }; } };
+    const model = new BedrockChatModel({ region: "xx-test-1", modelId: "configured-chat-model", client: client as never });
+    for await (const _ of model.streamAnswer({ system: "s", user: "u", maxOutputTokens: 10 })) void _;
+    for await (const _ of model.streamAnswer({ system: "s", user: "u", maxOutputTokens: 10, temperature: 0 })) void _;
+    expect(sent[0]!.inferenceConfig).toEqual({ maxTokens: 10 });
+    expect(sent[1]!.inferenceConfig).toEqual({ maxTokens: 10, temperature: 0 });
+  });
+
   it("Claude on the Anthropic API: maps stream events to text and usage", async () => {
     let request: Record<string, unknown> = {};
     const client = {
@@ -638,17 +651,112 @@ describe("document summary: quotes are verified against the text", () => {
       points: [
         { text: "All animals enter the pen.", quotes: [{ p: "P1", q: "כונסן לדיר ומוציא עשרה" }, { p: "P1", q: "this sentence is not in the passage" }] },
         { text: "Invented point.", quotes: [{ p: "P2", q: "refunds are never approved at all" }] },
-        { text: "Wrong passage.", quotes: [{ p: "P9", q: "Refunds are approved within thirty days" }] },
+        { text: "Too short.", quotes: [{ p: "P2", q: "Refunds" }] },
         { text: "Refund window.", quotes: [{ p: "P2", q: "Refunds are approved within thirty days of purchase." }] },
+        { text: "   ", quotes: [{ p: "P2", q: "Refunds are approved within thirty days" }] },
+        { text: "No quote list." },
       ],
     }) + "\n```";
     const draft = parseSummaryReply(reply, passages)!;
     expect(draft.overview).toBe("A short overview.");
     expect(draft.points.map((p) => p.text)).toEqual(["All animals enter the pen.", "Refund window."]);
     expect(draft.points[0]!.quotes).toHaveLength(1);
-    expect(draft).toMatchObject({ rejectedQuotes: 3, rejectedPoints: 2 });
+    expect(draft).toMatchObject({ rejectedQuotes: 3, rejectedPoints: 4, relocatedQuotes: 0 });
     const quote = draft.points[1]!.quotes[0]!;
     expect(passages[1]!.text.slice(quote.start, quote.end)).toBe("Refunds are approved within thirty days of purchase");
+    // Every drop is recorded with its reason, by position and length, never with the words.
+    expect(draft.rejections).toEqual([
+      { kind: "quote", point: 1, reason: "not_found", label: "P1", length: 35 },
+      { kind: "quote", point: 2, reason: "not_found", label: "P2", length: 33 },
+      { kind: "point", point: 2, reason: "no_verified_quote" },
+      { kind: "quote", point: 3, reason: "too_short", label: "P2", length: 7 },
+      { kind: "point", point: 3, reason: "no_verified_quote" },
+      { kind: "point", point: 5, reason: "empty_text" },
+      { kind: "point", point: 6, reason: "malformed" },
+    ]);
+    const described = describeRejections(draft);
+    expect(described).toEqual({
+      keptPoints: 2, rejectedQuotes: 3, rejectedPoints: 4, relocatedQuotes: 0,
+      reasons: "quote_not_found=2 point_no_verified_quote=2 quote_too_short=1 point_empty_text=1 point_malformed=1",
+      first: "1:quote:not_found:P1:35 2:quote:not_found:P2:33 2:point:no_verified_quote 3:quote:too_short:P2:7 3:point:no_verified_quote 5:point:empty_text 6:point:malformed",
+    });
+    expect(JSON.stringify(described)).not.toContain("refunds are never");
+  });
+
+  it("finds a quote in another passage when the one the model named does not hold it", () => {
+    const reply = JSON.stringify({
+      overview: "o",
+      points: [
+        { text: "Unknown label.", quotes: [{ p: "P9", q: "Refunds are approved within thirty days" }] },
+        { text: "Neighbouring label.", quotes: [{ p: "P2", q: "כונסן לדיר ומוציא עשרה" }] },
+        { text: "No label at all.", quotes: [{ q: "approved within thirty days of purchase" }] },
+        { text: "Right label.", quotes: [{ p: "P2", q: "Refunds are approved within thirty days" }] },
+      ],
+    });
+    const draft = parseSummaryReply(reply, passages)!;
+    expect(draft.points.map((p) => p.quotes[0]!.label)).toEqual(["P2", "P1", "P2", "P2"]);
+    expect(draft).toMatchObject({ rejectedQuotes: 0, rejectedPoints: 0, relocatedQuotes: 3, rejections: [] });
+    const moved = draft.points[1]!.quotes[0]!;
+    expect(passages[0]!.text.slice(moved.start, moved.end)).toBe("כונסן לדיר ומוציא עשרה");
+  });
+
+  it("matches a quote that the model copied with the HTML entities of the prompt", () => {
+    expect(unescapeEntities("R&amp;D &lt;draft&gt; &quot;x&quot; &#39;y&#x27; &#1488; &copy; &amp;amp;")).toBe("R&D <draft> \"x\" 'y' א &copy; &amp;");
+    const text = "Research & development costs <estimated> are booked in the R&D ledger each quarter.";
+    const withEntities = [{ label: "P1", location: null, text }];
+    const request = buildSummaryRequest({ title: "t", passages: withEntities, language: "en", maxOutputTokens: 100 });
+    expect(request.user).toContain("Research &amp; development costs &lt;estimated&gt;");
+    const reply = JSON.stringify({
+      overview: "o",
+      points: [
+        { text: "As the model saw it.", quotes: [{ p: "P1", q: "Research &amp; development costs &lt;estimated&gt; are booked in the R&amp;D ledger" }] },
+        { text: "As the document has it.", quotes: [{ p: "P1", q: "development costs <estimated> are booked in the R&D ledger" }] },
+      ],
+    });
+    const draft = parseSummaryReply(reply, withEntities)!;
+    expect(draft).toMatchObject({ rejectedQuotes: 0, rejectedPoints: 0 });
+    const first = draft.points[0]!.quotes[0]!;
+    expect(text.slice(first.start, first.end)).toBe("Research & development costs <estimated> are booked in the R&D ledger");
+    // A document that itself contains the letters of an entity is matched as written.
+    const literal = [{ label: "P1", location: null, text: "Write the ampersand as &amp; in every HTML page of the site." }];
+    const kept = parseSummaryReply(JSON.stringify({ overview: "o", points: [{ text: "p", quotes: [{ p: "P1", q: "ampersand as &amp; in every HTML page" }] }] }), literal)!;
+    expect(kept.points).toHaveLength(1);
+  });
+
+  it("shows the model each sentence once: the overlap between passages is left out of the prompt", () => {
+    const blocks = [{ text: Array.from({ length: 12 }, (_, i) => `Sentence number ${i + 1} explains one rule of the refund policy in plain words.`).join(" "), pageNumber: 1, sectionPath: null }];
+    const chunks = chunkBlocks(blocks, { targetChars: 300, maxChars: 500, overlapChars: 120 });
+    expect(chunks.length).toBeGreaterThan(2);
+    const overlapped = chunks.map((chunk, i) => ({ label: `P${i + 1}`, location: null, text: chunk.text, overlap: i > 0 ? leadingOverlap(chunks[i - 1]!.text, chunk.text) : 0 }));
+    expect(overlapped[0]!.overlap).toBe(0);
+    for (const passage of overlapped.slice(1)) expect(passage.overlap).toBeGreaterThan(20);
+    const request = buildSummaryRequest({ title: "t", passages: overlapped, language: "en", maxOutputTokens: 100 });
+    for (let n = 1; n <= 12; n++) expect(request.user.split(`Sentence number ${n} explains`)).toHaveLength(2);
+    expect(request.user.match(/<passage /g)).toHaveLength(chunks.length);
+    expect(request.temperature).toBe(0);
+
+    // Offsets still refer to the stored passage in full, and prefer the part the model was shown.
+    const second = overlapped[1]!;
+    const own = second.text.slice(second.overlap).trimStart();
+    const ownSentence = own.slice(0, own.indexOf(".") + 1);
+    const repeated = second.text.slice(0, second.text.indexOf(".") + 1);
+    const draft = parseSummaryReply(JSON.stringify({
+      overview: "o",
+      points: [{ text: "own", quotes: [{ p: "P2", q: ownSentence }] }, { text: "repeated", quotes: [{ p: "P2", q: repeated }] }],
+    }), overlapped)!;
+    const [ownQuote, repeatedQuote] = draft.points.map((p) => p.quotes[0]!);
+    expect(second.text.slice(ownQuote!.start, ownQuote!.end) + ".").toBe(ownSentence);
+    expect(ownQuote!.start).toBeGreaterThanOrEqual(second.overlap);
+    expect(repeatedQuote).toMatchObject({ label: "P2", start: 0 });
+    expect(draft.relocatedQuotes).toBe(0);
+  });
+
+  it("measures the overlap between two passages and ignores chance repeats", () => {
+    expect(leadingOverlap("First part. The shared closing sentence.", "The shared closing sentence.\n\nNew text.")).toBe("The shared closing sentence.".length);
+    expect(leadingOverlap("First part. The shared closing sentence.  \n", "The shared closing sentence. More.")).toBe("The shared closing sentence.".length);
+    expect(leadingOverlap("It ends with the", "the next passage starts with the same word")).toBe(0);
+    expect(leadingOverlap("Nothing in common here.", "A different passage altogether.")).toBe(0);
+    expect(leadingOverlap("", "text")).toBe(0);
   });
 
   it("returns null for a reply that is not the expected JSON", () => {

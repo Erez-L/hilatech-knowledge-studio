@@ -501,6 +501,9 @@
       "empty": "Nothing is marked yet. Mark and summarize reads the whole document, highlights its key passages and writes a summary beside it.",
       "note": "Each point rests on the highlighted text; choose a point to jump to it. Check the text itself before relying on a summary.",
       "rejected": "{count, plural, one {# quote} other {# quotes}} could not be found in the text and were left out.",
+      "overviewLabel": "Overview",
+      "overviewUnverified": "The overview was written by the AI and was not checked against the text. Only the numbered points below are tied to highlighted text.",
+      "omittedPoints": "{count, plural, one {# more point was} other {# more points were}} left out, because the quotes they rested on could not be found in the text.",
       "errors": {
         "payload_too_large": "This document is too long to summarize in one pass.",
         "provider_error": "The summary could not be matched to the document's text. Try again.",
