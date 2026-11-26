@@ -7,7 +7,7 @@ How the public demo at https://knowledge.hilatechdev.com is deployed. First done
 | Piece | Where |
 |---|---|
 | Host | EC2 `hilatech-demo` (`i-0dbaef6ebf899621c`, t3.medium, us-east-1, Elastic IP `98.91.94.108`), shared with HilaTech AI Assistant |
-| This stack | `/opt/knowledge-studio`: compose project `knowledge-studio` with `web`, `worker`, `ks-postgres`, `ks-redis` and a one-shot `migrate` |
+| This stack | `/opt/knowledge-studio`: compose project `knowledge-studio` with `ks-web`, `ks-worker`, `ks-postgres`, `ks-redis` and a one-shot `migrate` |
 | The other product | `/opt/hilatech`, compose project `hilatech-ai-assistant`. It owns ports 80 and 443 through its Caddy container |
 | Routing | A site block for `knowledge.hilatechdev.com` in `/opt/hilatech/Caddyfile` proxies to `knowledge-studio-web:3000`. The web container joins the network `hilatech-ai-assistant_default` under that alias |
 | TLS | Caddy obtains the certificate from Let's Encrypt |
@@ -18,7 +18,7 @@ How the public demo at https://knowledge.hilatechdev.com is deployed. First done
 
 ## Two things that are easy to get wrong
 
-1. **Service names.** The web container is on two networks. On the proxy's network the other product also has services called `postgres` and `redis`. With those names in this stack, the web container connected to the other product's Redis and tried its Postgres. The services are therefore named `ks-postgres` and `ks-redis`. Never give a service here a name that exists in the other stack.
+1. **Service names.** The web container is on two networks. On the proxy's network the other product also has services called `postgres` and `redis`. With those names in this stack, the web container connected to the other product's Redis and tried its Postgres. The services are therefore named `ks-postgres` and `ks-redis`. The same applies to `web`: Docker registers every service name as an alias on each network the container joins, so a service called `web` here was also reachable as `web` on the proxy's network, next to the other product's own `web`, and the proxy intermittently served this app on the other product's domain. The services are therefore named `ks-web` and `ks-worker` (containers `knowledge-studio-ks-web-1` and `knowledge-studio-ks-worker-1`); the proxy keeps reaching this app through the alias `knowledge-studio-web`. Never give a service here a name that exists in the other stack.
 2. **The Caddyfile is a single-file bind mount.** Append to it in place (`cat >> Caddyfile`). An editor or `sed -i` replaces the file and the running container keeps seeing the old one. Validate before reloading: `docker exec hilatech-ai-assistant-proxy-1 caddy validate --config /etc/caddy/Caddyfile`, then `caddy reload`. The copy from before the change is `/opt/hilatech/Caddyfile.before-knowledge-studio`.
 
 If a deployment of the other product replaces its Caddyfile from its own repository, the `knowledge.hilatechdev.com` block is lost. It has to be added to that repository as well. Not done yet.
@@ -28,9 +28,9 @@ If a deployment of the other product replaces its Caddyfile from its own reposit
 1. Publish a GitHub release with tag `vX.Y.Z` on the branch to deploy. Wait for the "Build image" workflow.
 2. Cloudflare: A record for the subdomain to the Elastic IP, DNS only. Do this before step 5, or Caddy fails the certificate challenge.
 3. IAM: inline policy on the instance role for the bucket (once).
-4. On the host, in `/opt/knowledge-studio`: the four files from `infrastructure/deploy/`, a `.env` made from `env.example` with generated values, then `docker compose -f docker-compose.prod.yml --env-file .env up -d`. Wait for `web` to be healthy.
+4. On the host, in `/opt/knowledge-studio`: the four files from `infrastructure/deploy/`, a `.env` made from `env.example` with generated values, then `docker compose -f docker-compose.prod.yml --env-file .env up -d`. Wait for `ks-web` to be healthy.
 5. Append the site block from `Caddyfile.snippet` to the proxy's Caddyfile, validate, reload.
-6. Seed the demo once: `docker compose -f docker-compose.prod.yml --env-file .env run --rm --no-deps -T worker pnpm -s demo:seed`. It embeds the twelve sample documents with the real embeddings model (a paid call of a few cents).
+6. Seed the demo once: `docker compose -f docker-compose.prod.yml --env-file .env run --rm --no-deps -T ks-worker pnpm -s demo:seed`. It embeds the twelve sample documents with the real embeddings model (a paid call of a few cents).
 7. Check `https://<subdomain>/api/v1/demo` returns `available: true` with `pipeline.mode: "live"`, and that the other product still answers.
 
 Commands on the host were run as root through AWS Systems Manager (`aws ssm send-command`, document `AWS-RunShellScript`) from CloudShell; the host needs no inbound SSH for this.
@@ -38,11 +38,15 @@ Commands on the host were run as root through AWS Systems Manager (`aws ssm send
 ## Releasing a new version
 
 1. Publish a release `vX.Y.Z`; wait for the image.
-2. On the host: `cd /opt/knowledge-studio && ./deploy.sh vX.Y.Z`. It pulls, restarts, waits for `web` to be healthy and prints the previous tag. It keeps the old image.
+2. On the host: `cd /opt/knowledge-studio && ./deploy.sh vX.Y.Z`. It pulls, restarts, waits for `ks-web` to be healthy and prints the previous tag. It keeps the old image.
 3. Check the live site.
 4. Only after the owner has approved the new version: `./prune-old-images.sh`. It removes every older image of this app, and with them the quick way back.
 
 To go back before pruning: `./deploy.sh <previous tag>`.
+
+### The release that renames `web` and `worker`
+
+The first deploy after the rename to `ks-web` and `ks-worker` needs the new `docker-compose.prod.yml` and `deploy.sh` copied to `/opt/knowledge-studio` first. `deploy.sh` then creates the containers `knowledge-studio-ks-web-1` and `knowledge-studio-ks-worker-1`, and its `--remove-orphans` removes the old `knowledge-studio-web-1` and `knowledge-studio-worker-1`. The site is down for the seconds between the two. The Caddy block does not change: it points at the alias `knowledge-studio-web`. Going back to an older image tag with the new compose file works; going back to the old compose file brings the name collision back.
 
 ## State on 2026-11-17
 
