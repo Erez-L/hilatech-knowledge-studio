@@ -48,7 +48,7 @@
     "body": "Each statement in an answer points to the passage behind it. Choose a question, then select a citation to read the source.",
     "questionsLabel": "Example questions",
     "libraryLabel": "{company} knowledge library",
-    "note": "These answers are pre-written examples, shown to explain how the product works.",
+    "note": "These answers are examples written in advance. In the demo you ask your own questions.",
     "cta": "Open the demo workspace",
     "sourceLabel": "Source"
   },
@@ -61,7 +61,7 @@
       },
       "ask": {
         "title": "Ask meaningful questions",
-        "body": "Ask the way you would ask a colleague, in Hebrew or in English. Follow up without repeating yourself."
+        "body": "Ask the way you would ask a colleague, in Hebrew or in English. Each question is answered on its own, so write it in full."
       },
       "verify": {
         "title": "Verify every answer",
@@ -73,8 +73,7 @@
       "reading": "Reading",
       "askPlaceholder": "Who approves a refund above $400?",
       "verifyLocator": "Customer Support Handbook"
-    },
-    "status": "In development: document upload and live AI answers are being built. The demo currently shows pre-written examples from fictional sample documents."
+    }
   },
   "useCases": {
     "title": "One workspace, useful to every team.",
@@ -106,7 +105,7 @@
   },
   "trust": {
     "title": "Built so you can check its work.",
-    "body": "An answer is only useful if you can rely on it. These are the rules the product is being built around; they describe the design, not a finished service.",
+    "body": "An answer is only useful if you can rely on it. These are the rules the product works by.",
     "items": {
       "private": {
         "title": "Private documents",
@@ -156,7 +155,7 @@
   },
   "footer": {
     "tagline": "Your knowledge. Instant answers. Verified sources.",
-    "disclosure": "An independent demonstration product by HilaTech. Northstar Business Services and its documents are fictional.",
+    "disclosure": "An independent product by HilaTech. Northstar Business Services, the company in the demo, and its documents are fictional.",
     "navLabel": "Footer",
     "rights": "© {year} HilaTech"
   },
@@ -173,7 +172,7 @@
     "you": "You",
     "assistant": "Knowledge Studio",
     "preview": {
-      "banner": "Answers on this screen are pre-written examples based on fictional documents. Live AI answers are not connected yet.",
+      "banner": "Answers on this screen are examples written in advance, based on fictional documents. They are not generated live.",
       "answerTag": "Pre-written sample answer"
     },
     "empty": {
@@ -578,7 +577,7 @@
           "Open the demo from the menu.",
           "Choose one of the suggested questions, or type your own in the box at the bottom and press Enter.",
           "Read the answer, then select a citation number to see the passage it relies on.",
-          "Ask a follow-up in the same conversation, or start again with New chat."
+          "Ask another question in the same conversation, or start again with New chat. Each question is answered on its own, so write it in full."
         ]
       },
       "asking": {
@@ -636,7 +635,7 @@
       "workspace": {
         "title": "The workspace, for signed-in teams",
         "paragraphs": [
-          "A signed-in organization gets a private workspace with its own library. New accounts are not open on this demonstration site; use the contact form to ask for access."
+          "A signed-in organization gets a private workspace with its own library. To open an account, sign up on the sign-up page and confirm your email address with the link we send to it."
         ],
         "points": [
           "Library. Upload PDF, Word (.docx), text or Markdown files, up to 20 MB each. Scanned PDF pages are read by automatic text recognition where it is switched on, with a page limit; text read from a scan can contain mistakes.",
@@ -662,7 +661,7 @@
         "points": [
           "Why did it cite the English document when I asked in Hebrew, or the other way round? In the demo every document exists in both languages with the same content, and either edition can support the answer.",
           "Can it answer from two documents at once? Yes. Each statement cites its own source.",
-          "Does it remember earlier questions? Inside one conversation, yes. A new chat starts fresh.",
+          "Does it remember earlier questions? No. Each question is answered on its own, even inside one conversation, so write every question in full.",
           "Why was my question refused? Either the documents do not cover it, or a demo limit was reached. The message says which."
         ]
       }
