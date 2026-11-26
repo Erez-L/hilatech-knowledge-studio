@@ -101,9 +101,6 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?:
   };
 }
 
-/** What a Word document may expand to, all parts together, actually inflated. */
-export const DOCX_MAX_EXPANDED_BYTES = 64 * 1024 * 1024;
-
 /** A page with fewer printed characters than this in its text layer is treated as a scan. */
 const SCANNED_PAGE_MAX_CHARS = 15;
 /** 72 dpi × 2.5 = 180 dpi: enough for small print without making the image needlessly large. */
@@ -151,6 +148,9 @@ function stripRunningLines(pages: string[]): string[] {
 }
 
 /** DOCX: converted to simple HTML by mammoth, then walked block by block, tracking the heading trail. */
+/** What a Word document may expand to, all parts together, actually inflated. */
+export const DOCX_MAX_EXPANDED_BYTES = 64 * 1024 * 1024;
+
 async function extractDocx(bytes: Uint8Array): Promise<ExtractedDocument> {
   inspectZip(bytes); // zip-bomb and structure check before the parser touches it
   // The sizes above are what the file declares. Inflate every part once, with a hard cap, so a
