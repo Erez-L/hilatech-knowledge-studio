@@ -61,7 +61,9 @@ services:
       migrate: { condition: service_completed_successfully }
       ks-redis: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/demo').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # /api/health answers 200 only when PostgreSQL and Redis are reachable. An image from before
+      # that endpoint existed answers 404, and the older demo endpoint is asked instead.
+      test: ["CMD", "node", "-e", "const u='http://127.0.0.1:3000/api/';fetch(u+'health').then(r=>r.status===404?fetch(u+'v1/demo'):r).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 8
@@ -79,6 +81,14 @@ services:
       migrate: { condition: service_completed_successfully }
       ks-redis: { condition: service_healthy }
     mem_limit: 640m
+    # The worker has no port. It rewrites a heartbeat file while it runs and Redis answers;
+    # the check fails when the file is missing or older than 90 seconds.
+    healthcheck:
+      test: ["CMD", "node", "-e", "const f=process.env.WORKER_HEARTBEAT_FILE||require('os').tmpdir()+'/hks-worker-heartbeat';process.exit(Date.now()-require('fs').statSync(f).mtimeMs<90000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
 networks:
   edge:

@@ -93,6 +93,10 @@ const schema = z.object({
   LIMIT_DEMO_QUESTIONS_PER_DAY: int(300, 1),
   LIMIT_UPLOADS_PER_MINUTE: int(10, 1),
   LEADS_STORE: z.enum(["file", "postgres", "none"]).optional(),
+
+  // The worker rewrites this file while it is alive; its container health check reads the age.
+  // Default: hks-worker-heartbeat in the system's temporary directory.
+  WORKER_HEARTBEAT_FILE: z.string().min(1).optional(),
 });
 
 export type Config = Readonly<z.output<typeof schema>> & {
