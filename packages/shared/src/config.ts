@@ -117,9 +117,11 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
   const c = result.data;
   const problems: string[] = [];
 
+  // "demo" is a deployed, public environment too: it gets the same safety checks as production.
+  const deployed = c.APP_ENV === "production" || c.APP_ENV === "demo";
   const usesDouble = c.LLM_PROVIDER === "deterministic" || c.EMBEDDINGS_PROVIDER === "deterministic" || c.OCR_PROVIDER === "deterministic";
-  if (usesDouble && c.APP_ENV === "production") {
-    problems.push("deterministic providers are test doubles and cannot run in production");
+  if (usesDouble && deployed) {
+    problems.push(`deterministic providers are test doubles and cannot run in ${c.APP_ENV}`);
   }
   if (usesDouble && c.APP_ENV !== "test" && !c.SAMPLE_MODE) {
     problems.push("deterministic providers require SAMPLE_MODE=true");
@@ -140,8 +142,8 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
   if (c.MAIL_TRANSPORT === "ses" && /@localhost>?\s*$/.test(c.MAIL_FROM)) {
     problems.push("MAIL_FROM must be an address on a domain verified in Amazon SES");
   }
-  if (c.MAIL_TRANSPORT === "file" && c.APP_ENV === "production") {
-    problems.push("MAIL_TRANSPORT=file is a development outbox and cannot be used in production");
+  if (c.MAIL_TRANSPORT === "file" && deployed) {
+    problems.push(`MAIL_TRANSPORT=file is a development outbox and cannot be used in ${c.APP_ENV}`);
   }
   if (c.AUTH_SECRET !== undefined && c.AUTH_SECRET.length < 32) problems.push("AUTH_SECRET must be at least 32 characters");
   if (c.CHUNK_MAX_CHARS < c.CHUNK_TARGET_CHARS) problems.push("CHUNK_MAX_CHARS must be >= CHUNK_TARGET_CHARS");

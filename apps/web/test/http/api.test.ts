@@ -376,6 +376,17 @@ describe("roles inside one organization", () => {
     expect((await member.client.getJson("/api/v1/conversations")).conversations.some((c: any) => c.id === aliceConversationId)).toBe(false);
   });
 
+  it("a member cannot move a colleague's document to another project (the same rule as delete)", async () => {
+    const created = await alice.client.post("/api/v1/projects", { name: "Elsewhere" });
+    expect(created.status).toBe(201);
+    const projectId = (await created.json()).project.id;
+    expect((await member.client.post(`/api/v1/documents/${handbookId}/move`, { projectId })).status).toBe(403);
+    const audit = await ownerQuery("select outcome from audit_events where action = 'document.move' and actor_user_id = $1", [member.userId], { organizationId: alice.organizationId });
+    expect(audit).toEqual([{ outcome: "denied" }]);
+    expect((await alice.client.getJson(`/api/v1/documents/${handbookId}`)).document.id).toBe(handbookId); // still in its project
+    expect((await alice.client.request(`/api/v1/projects/${projectId}`, { method: "DELETE" })).status).toBe(200);
+  });
+
   it("a member can delete their own upload but not someone else's", async () => {
     const upload = await member.client.upload("member-notes.txt", new TextEncoder().encode("The stationery cupboard is restocked every second Monday."));
     memberDocId = (await upload.json()).document.id;
@@ -383,7 +394,7 @@ describe("roles inside one organization", () => {
     const denied = await member.client.request(`/api/v1/documents/${handbookId}`, { method: "DELETE" });
     expect(denied.status).toBe(403);
     expect((await member.client.request(`/api/v1/documents/${memberDocId}`, { method: "DELETE" })).status).toBe(200);
-    const audit = await ownerQuery("select outcome from audit_events where action = 'document.delete' and actor_user_id = $1", [member.userId]);
+    const audit = await ownerQuery("select outcome from audit_events where action = 'document.delete' and actor_user_id = $1", [member.userId], { organizationId: alice.organizationId });
     expect(audit).toEqual([{ outcome: "denied" }]);
   });
 
@@ -443,7 +454,7 @@ describe("deletion over HTTP", () => {
     expect(JSON.stringify(events)).not.toContain(handbookId);
     const thread = await alice.client.getJson(`/api/v1/conversations/${aliceConversationId}`);
     expect(thread.messages[1].citations[0]).toMatchObject({ sourceState: "removed", excerpt: null, documentId: null, documentTitle: "Customer support handbook" });
-    const left = await ownerQuery("select (select count(*) from document_chunks where document_id = $1)::int as chunks, (select count(*) from chunk_embeddings where document_id = $1)::int as vectors", [handbookId]);
+    const left = await ownerQuery("select (select count(*) from document_chunks where document_id = $1)::int as chunks, (select count(*) from chunk_embeddings where document_id = $1)::int as vectors", [handbookId], { organizationId: alice.organizationId });
     expect(left[0]).toEqual({ chunks: 0, vectors: 0 });
   });
 });
@@ -609,7 +620,8 @@ describe("public demo", () => {
     }
     expect(capped?.response.status).toBe(429);
     expect(capped.body.error).toMatchObject({ code: "budget_exceeded" });
-    const answered = (await ownerQuery("SELECT count(*)::int AS n FROM usage_events u JOIN organizations o ON o.id = u.organization_id WHERE o.kind = 'demo' AND u.kind = 'chat_completion'"))[0].n;
+    const demoOrganization = (await ownerQuery("SELECT id FROM organizations WHERE kind = 'demo'"))[0].id;
+    const answered = (await ownerQuery("SELECT count(*)::int AS n FROM usage_events WHERE organization_id = $1 AND kind = 'chat_completion'", [demoOrganization], { organizationId: demoOrganization }))[0].n;
     expect(answered).toBe(14);
   });
 });

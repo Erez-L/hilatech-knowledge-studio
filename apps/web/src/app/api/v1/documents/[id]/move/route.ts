@@ -1,8 +1,8 @@
-import { getProject, moveDocument, recordAudit, withTenant } from "@hks/database";
+import { getDocument, getProject, moveDocument, recordAudit, withTenant } from "@hks/database";
 import { AppError } from "@hks/shared";
 import { z } from "zod";
-import { requireCapability, requireContext } from "@/server/context";
-import { json, route, uuidParam } from "@/server/http";
+import { can, requireCapability, requireContext } from "@/server/context";
+import { auditDenied, json, route, uuidParam } from "@/server/http";
 import { getServices } from "@/server/services";
 
 export const runtime = "nodejs";
@@ -15,6 +15,14 @@ export const POST = route<{ id: string }>(async ({ request, params, requestId })
   const parsed = z.object({ projectId: z.uuid() }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) throw new AppError("validation", "Choose a project");
   const org = ctx.tenant.organizationId;
+  // The same rule as deleting: moving takes a document out of its project's answers.
+  // Members may move what they uploaded; admins and owners may move anything.
+  const doc = await withTenant(getServices().db, org, (tx) => getDocument(tx, ctx.tenant, id));
+  if (!doc) throw new AppError("not_found");
+  if (!can(ctx, "documents.delete_any") && doc.uploadedByUserId !== ctx.user.id) {
+    await auditDenied("document.move", { organizationId: org, userId: ctx.user.id }, requestId);
+    throw new AppError("forbidden", "Only the uploader or an admin can move this document");
+  }
   const outcome = await withTenant(getServices().db, org, async (tx) => {
     if (!(await getProject(tx, org, parsed.data.projectId))) return "not_found" as const;
     const result = await moveDocument(tx, ctx.tenant, id, parsed.data.projectId);

@@ -1,6 +1,14 @@
 # HilaTech Knowledge Studio on a single Docker host, next to another product.
 # Lives in /opt/knowledge-studio on the host, with .env beside it (see env.example).
 #
+# Database credentials are split by who needs them (see env.example and
+# docs/DEPLOYMENT_SINGLE_HOST.md, "Database roles and secrets"):
+#   .env          everything web and worker need, with DATABASE_URL for the hks_app role only
+#   migrate.env   DATABASE_MIGRATION_URL (the owner role), read by the migrate job only
+#   postgres.env  the superuser, owner and application passwords, read by ks-postgres only
+# migrate.env and postgres.env are optional so that a host that still keeps those values in
+# .env keeps working; once they are moved, web and worker no longer receive them.
+#
 # The host's ports 80 and 443 belong to the reverse proxy of the other product. This stack
 # publishes no port. Its web container joins that proxy's network under the alias
 # `knowledge-studio-web`, and the proxy routes the subdomain to it (see Caddyfile.snippet).
@@ -24,10 +32,11 @@ services:
   ks-postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?}
-      HKS_OWNER_PASSWORD: ${HKS_OWNER_PASSWORD:?}
-      HKS_APP_PASSWORD: ${HKS_APP_PASSWORD:?}
+    # POSTGRES_PASSWORD, HKS_OWNER_PASSWORD and HKS_APP_PASSWORD, read only when the data volume
+    # is first created (postgres-init.sh). A new host needs the file; an existing volume does not.
+    env_file:
+      - path: postgres.env
+        required: false
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
@@ -53,6 +62,11 @@ services:
 
   migrate:
     <<: *app
+    # The only application container that receives the owner role.
+    env_file:
+      - path: .env
+      - path: migrate.env
+        required: false
     restart: "no"
     command: ["pnpm", "db:migrate"]
     depends_on:

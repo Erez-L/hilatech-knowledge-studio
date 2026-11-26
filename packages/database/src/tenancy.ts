@@ -45,7 +45,9 @@ export async function listMemberships(db: Db, userId: string): Promise<Membershi
     .select({ m: memberships, o: organizations })
     .from(memberships)
     .innerJoin(organizations, eq(organizations.id, memberships.organizationId))
-    .where(eq(memberships.userId, userId));
+    .where(eq(memberships.userId, userId))
+    // A stable order: the first entry is the organization used when the request names none.
+    .orderBy(memberships.createdAt, memberships.organizationId);
   const result: MembershipView[] = [];
   for (const { m, o } of rows) {
     const workspace = await withTenant(db, o.id, (tx) => defaultWorkspace(tx, o.id));
