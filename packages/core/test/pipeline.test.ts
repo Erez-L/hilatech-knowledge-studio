@@ -48,6 +48,7 @@ import {
   isPermanentFailure,
   LocalFileStorage,
   retryIngestion,
+  sweepStuckDocuments,
   readSummary,
   summarizeDocument,
   uploadDocument,
@@ -231,6 +232,52 @@ describe("upload → ingestion → ready", () => {
       await flakyQueue.close();
     }
   }, 40_000);
+});
+
+describe("ingestion that cannot run or stops midway", () => {
+  it("marks a document failed when the queue refuses it, keeps the file, and a retry then works", async () => {
+    const t = await tenant("queue-down");
+    const down: Services = { ...services, queue: { enqueueIngestion: async () => { throw new Error("connection refused"); } } };
+    const bytes = new TextEncoder().encode("The archive room is open on Tuesdays from nine to noon.");
+    expect(await codeOf(uploadDocument(down, t, { kind: "user", userId: t.userId }, { filename: "rooms.txt", bytes, correlationId: "c" }))).toBe("queue_unavailable");
+    const [stored] = await withTenant(database.db, t.organizationId, (tx) => tx.execute(sql`select id, status, failure_code, storage_key from documents where organization_id = ${t.organizationId}::uuid`)).then((r) => r.rows);
+    expect(stored).toMatchObject({ status: "failed", failure_code: "queue_unavailable" });
+    // The file is still there, so the retry has something to index.
+    expect((await services.storage.get(String(stored!.storage_key))).byteLength).toBe(bytes.byteLength);
+    const job = await withTenant(database.db, t.organizationId, (tx) => latestIngestionJob(tx, t, String(stored!.id)));
+    expect(job).toMatchObject({ status: "failed", errorCode: "queue_unavailable" });
+
+    // A retry while the queue is still down fails the same way, and leaves it retryable.
+    expect(await codeOf(retryIngestion(down, t, String(stored!.id), "c"))).toBe("queue_unavailable");
+    expect((await withTenant(database.db, t.organizationId, (tx) => getDocument(tx, t, String(stored!.id))))!.status).toBe("failed");
+    await retryIngestion(services, t, String(stored!.id), "c");
+    expect((await waitFor(t, String(stored!.id))).status).toBe("ready");
+  });
+
+  it("marks a document stuck in processing failed when the queue no longer holds its job, and leaves one the queue still holds", async () => {
+    const t = await tenant("stuck");
+    const jobs: IngestionJobData[] = [];
+    const parked: Services = { ...services, queue: { enqueueIngestion: async (data) => void jobs.push(data) } };
+    const lost = await uploadDocument(parked, t, { kind: "user", userId: t.userId }, { filename: "lost.txt", bytes: new TextEncoder().encode("Lost job text about parking."), correlationId: "c" });
+    const held = await uploadDocument(parked, t, { kind: "user", userId: t.userId }, { filename: "held.txt", bytes: new TextEncoder().encode("Held job text about lockers."), correlationId: "c" });
+    await withTenant(database.db, t.organizationId, (tx) =>
+      tx.execute(sql`update documents set status = 'processing', updated_at = now() - interval '2 hours' where organization_id = ${t.organizationId}::uuid`),
+    );
+    const heldJob = jobs.find((job) => job.documentId === held.id)!.jobId;
+    const queueView = { jobState: async (jobId: string) => (jobId === heldJob ? "active" : null) };
+
+    expect(await sweepStuckDocuments(services, queueView)).toBeGreaterThanOrEqual(1);
+    const after = async (id: string) => withTenant(database.db, t.organizationId, (tx) => getDocument(tx, t, id));
+    expect(await after(lost.id)).toMatchObject({ status: "failed", failureCode: "internal" });
+    expect((await after(held.id))!.status).toBe("processing");
+    // A recent document is not touched, whatever the queue says.
+    const fresh = await uploadDocument(parked, t, { kind: "user", userId: t.userId }, { filename: "fresh.txt", bytes: new TextEncoder().encode("Fresh text about bicycles."), correlationId: "c" });
+    await sweepStuckDocuments(services, { jobState: async () => null });
+    expect((await after(fresh.id))!.status).toBe("queued");
+    // The failed one can be retried.
+    await retryIngestion(services, t, lost.id, "c");
+    expect((await waitFor(t, lost.id)).status).toBe("ready");
+  });
 });
 
 describe("question → retrieval → grounded answer", () => {

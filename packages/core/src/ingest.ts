@@ -69,8 +69,9 @@ export async function uploadDocument(
   const storageKey = newStorageKey(ctx.organizationId);
 
   await storage.put(storageKey, input.bytes, mimeType);
+  let created: { document: DocumentRow; job: { id: string } };
   try {
-    const { document, job } = await withTenant(db, ctx.organizationId, async (tx) => {
+    created = await withTenant(db, ctx.organizationId, async (tx) => {
       const document = await createDocument(tx, ctx, {
         uploadedByUserId: actor.kind === "user" ? actor.userId : null,
         title,
@@ -94,18 +95,51 @@ export async function uploadDocument(
       });
       return { document, job };
     });
-    await queue.enqueueIngestion({
-      organizationId: ctx.organizationId,
-      workspaceId: ctx.workspaceId,
-      documentId: document.id,
-      jobId: job.id,
-      correlationId: input.correlationId,
-    });
-    return document;
   } catch (error) {
+    // Nothing refers to the file yet: remove it.
     await storage.delete(storageKey).catch(() => {});
     throw error;
   }
+  const { document, job } = created;
+  await enqueueOrMarkFailed(services, ctx, { documentId: document.id, jobId: job.id, correlationId: input.correlationId });
+  return document;
+}
+
+/**
+ * Hands a job to the queue. When the queue refuses it (Redis down or full), the document and the
+ * job are marked failed with queue_unavailable instead of staying "queued" with no job behind
+ * them; the stored file is kept, so the document can simply be retried.
+ */
+async function enqueueOrMarkFailed(services: Services, ctx: TenantContext, job: { documentId: string; jobId: string; correlationId: string; reindex?: boolean }) {
+  try {
+    await services.queue.enqueueIngestion({ organizationId: ctx.organizationId, workspaceId: ctx.workspaceId, ...job });
+  } catch (error) {
+    log("error", "ingestion.enqueue_failed", { documentId: job.documentId, correlationId: job.correlationId });
+    await markIngestionFailed(services, ctx, { documentId: job.documentId, jobId: job.jobId }, "queue_unavailable", "The processing queue is not available. Try again in a moment.");
+    throw new AppError("queue_unavailable", "The document was saved but could not be queued for processing", { cause: error });
+  }
+}
+
+/**
+ * Marks a document that is still waiting for or in processing failed, with its job. Used when a
+ * job ends without the ingestion code recording why: the queue refused it, it stalled, or it was
+ * lost. A document in any other state is left as it is.
+ */
+export async function markIngestionFailed(
+  services: Pick<Services, "db">,
+  ctx: TenantContext,
+  job: { documentId: string; jobId: string },
+  code: ErrorCode,
+  detail: string,
+) {
+  await withTenant(services.db, ctx.organizationId, async (tx) => {
+    // Only while the document is still waiting or in processing: a failure the ingestion code
+    // already recorded, with its own reason, is kept, and a Ready document is not touched.
+    const document = await getDocument(tx, ctx, job.documentId);
+    if (!document || !["queued", "processing", "uploaded", "pending_upload"].includes(document.status)) return;
+    await updateIngestionJob(tx, ctx, job.jobId, { status: "failed", errorCode: code, errorDetail: detail, finishedAt: new Date() });
+    await updateDocument(tx, ctx, job.documentId, { status: "failed", failureCode: code, failureDetail: detail });
+  });
 }
 
 /**
@@ -357,7 +391,7 @@ export async function retryIngestion(services: Services, ctx: TenantContext, doc
     await updateDocument(tx, ctx, documentId, { status: "queued", failureCode: null, failureDetail: null });
     return createIngestionJob(tx, ctx, { documentId, correlationId });
   });
-  await services.queue.enqueueIngestion({ ...ctx, documentId, jobId: job.id, correlationId });
+  await enqueueOrMarkFailed(services, ctx, { documentId, jobId: job.id, correlationId });
 }
 
 /**

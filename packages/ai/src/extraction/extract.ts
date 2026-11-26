@@ -1,8 +1,8 @@
 import { AppError, isAppError } from "@hks/shared";
 import { normalizeForDisplay } from "../text/normalize.ts";
-import { inspectZip } from "./detect.ts";
+import { inspectZip, measureZipExpansion } from "./detect.ts";
 import { loadPdfLibrary } from "./pdf-library.ts";
-import { renderPdfPage } from "./render.ts";
+import { openPdfRenderer } from "./render.ts";
 import { DEFAULT_EXTRACTION_LIMITS, type ExtractedBlock, type ExtractedDocument, type ExtractionLimits, type FileType, type ScannedPageReading } from "./types.ts";
 
 /** Extracts text with page or section locations. Throws AppError with a stable code on failure. */
@@ -68,12 +68,18 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?:
     if (empty.length > scanned.maxPages) {
       throw new AppError("too_many_pages", `The PDF has ${empty.length} scanned pages; up to ${scanned.maxPages} can be read`);
     }
-    for (const pageNumber of empty) {
-      const png = await renderPdfPage(bytes, pageNumber, scanned.renderScale ?? SCANNED_PAGE_RENDER_SCALE);
-      const text = (await scanned.readPage(png, pageNumber)).trim();
-      // Whatever the text layer held is dropped either way: it was empty or unreadable.
-      pages[pageNumber - 1] = text;
-      if (text) ocrPages.push(pageNumber);
+    // One parse of the file for all of its scanned pages, not one per page.
+    const renderer = empty.length ? await openPdfRenderer(bytes) : null;
+    try {
+      for (const pageNumber of empty) {
+        const png = await renderer!.render(pageNumber, scanned.renderScale ?? SCANNED_PAGE_RENDER_SCALE);
+        const text = (await scanned.readPage(png, pageNumber)).trim();
+        // Whatever the text layer held is dropped either way: it was empty or unreadable.
+        pages[pageNumber - 1] = text;
+        if (text) ocrPages.push(pageNumber);
+      }
+    } finally {
+      await renderer?.close();
     }
     if (pages.reduce((sum, page) => sum + inkOf(page), 0) === 0) {
       throw new AppError("extraction_failed", "No text was found in the file");
@@ -94,6 +100,9 @@ async function extractPdf(bytes: Uint8Array, limits: ExtractionLimits, scanned?:
     })),
   };
 }
+
+/** What a Word document may expand to, all parts together, actually inflated. */
+export const DOCX_MAX_EXPANDED_BYTES = 64 * 1024 * 1024;
 
 /** A page with fewer printed characters than this in its text layer is treated as a scan. */
 const SCANNED_PAGE_MAX_CHARS = 15;
@@ -144,6 +153,9 @@ function stripRunningLines(pages: string[]): string[] {
 /** DOCX: converted to simple HTML by mammoth, then walked block by block, tracking the heading trail. */
 async function extractDocx(bytes: Uint8Array): Promise<ExtractedDocument> {
   inspectZip(bytes); // zip-bomb and structure check before the parser touches it
+  // The sizes above are what the file declares. Inflate every part once, with a hard cap, so a
+  // file that lies about them is refused before the parser expands it in memory.
+  measureZipExpansion(bytes, DOCX_MAX_EXPANDED_BYTES);
   const mammoth = (await import("mammoth")).default;
   let html: string;
   try {

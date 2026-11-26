@@ -235,6 +235,27 @@ export async function updateIngestionJob(
     .where(and(eq(ingestionJobs.organizationId, ctx.organizationId), eq(ingestionJobs.id, jobId)));
 }
 
+/**
+ * Documents of one organization still queued or processing, unchanged since `before`, with their
+ * latest ingestion job: candidates for the stuck-document sweep. Run inside that tenant.
+ */
+export async function listStaleIngestions(tx: Executor, organizationId: string, before: Date, limit = 100) {
+  const rows = await tx.execute(sql`
+    select d.id as document_id, d.workspace_id, j.id as job_id
+    from documents d
+    join lateral (
+      select id from ingestion_jobs
+      where organization_id = d.organization_id and document_id = d.id
+      order by queued_at desc limit 1
+    ) j on true
+    where d.organization_id = ${organizationId}::uuid
+      and d.status in ('queued', 'processing')
+      and d.updated_at < ${before.toISOString()}::timestamptz
+    order by d.updated_at
+    limit ${limit}`);
+  return rows.rows.map((row) => ({ documentId: String(row.document_id), workspaceId: String(row.workspace_id), jobId: String(row.job_id) }));
+}
+
 export async function latestIngestionJob(tx: Executor, ctx: TenantContext, documentId: string) {
   const [row] = await tx
     .select()
