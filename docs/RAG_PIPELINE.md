@@ -180,7 +180,7 @@ Order of operations for one question:
 
 1. **Validate** session, workspace and conversation ownership; build the tenant context.
 2. **Limits**: rate limit and usage budget (`ARCHITECTURE.md` section 13). Question length ≤ `RAG_MAX_QUESTION_CHARS` (default 2,000).
-3. **Query embedding**: `embedQuery(question)`. The question is normalized with the same search-text rules as chunks. Follow-up questions are embedded as written in the first delivery; rewriting a follow-up into a standalone query with the model is a later option and would be a separately metered call.
+3. **Query embedding**: `embedQuery(question)`. The question is normalized with the same search-text rules as chunks. In a conversation with earlier turns, a second query is embedded in the same request: the last `RAG_HISTORY_TURNS` (default 3) earlier questions followed by the new one (earlier answers are left out, so the search is not pulled towards passages already shown). Both queries are searched with the same tenant scope, and each passage is kept once with its best similarity. When the new question finds evidence above `RAG_EVIDENCE_MIN_SIMILARITY` on its own, its passages keep their order and come first, and passages found only through the earlier questions follow (a change of subject answers the new subject). When it does not (a vague follow-up such as "and the second one?"), both lists are ranked together by similarity, so the earlier subject's passages can lead. No model is asked to rewrite the question, so a follow-up costs no extra chat call.
 4. **Vector search**: the tenant filter is part of the SQL statement, never a post-filter in application code:
 
    ```sql
@@ -247,7 +247,7 @@ Construction rules:
 
 - Chunk text, document titles and section names are escaped before insertion: `<`, `>` and `&` are entity-encoded, so document content cannot close a `<source>` element or open a new one. Titles are length-limited and stripped of line breaks.
 - The `page` attribute is present only when the chunk has an extracted page number.
-- Conversation history: the last `RAG_HISTORY_TURNS` (default 4) user and assistant turns are sent as plain messages, with citation markers removed from past assistant text. Sources from earlier turns are not re-sent; old labels therefore cannot be cited, and the validator would reject them anyway.
+- Conversation history: the last `RAG_HISTORY_TURNS` (default 3, 0 turns it off) question/answer pairs are sent in a `<history>` block after the sources, escaped like every other block, clipped (400 characters per question, 700 per answer) and with citation markers removed from past assistant text. A failed or insufficient-evidence reply appears as "no answer". The system prompt says the history is for understanding the question only and is not a source. Sources from earlier turns are not re-sent; old labels therefore cannot be cited, and the validator would reject them anyway.
 - The model has no tools. Nothing it outputs can trigger an action; the worst outcome of a successful injection is misleading text, which the citation and labelling controls are designed to expose.
 - Adapter settings: `maxOutputTokens = LLM_MAX_OUTPUT_TOKENS` (default 1,024); no sampling parameters; reasoning effort from `LLM_EFFORT` (proposed `low` for this task, to be confirmed by evaluation, since thinking affects latency and output-token cost). The system prompt is static per version and locale-independent, which makes it a candidate for prompt caching later; the Haiku 5.5 page gives a minimum cacheable prompt of 512 tokens.
 

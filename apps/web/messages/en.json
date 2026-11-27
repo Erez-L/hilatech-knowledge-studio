@@ -61,7 +61,7 @@
       },
       "ask": {
         "title": "Ask meaningful questions",
-        "body": "Ask the way you would ask a colleague, in Hebrew or in English. Each question is answered on its own, so write it in full."
+        "body": "Ask the way you would ask a colleague, in Hebrew or in English. Follow up in the same conversation: the last few questions are taken into account."
       },
       "verify": {
         "title": "Verify every answer",
@@ -577,7 +577,7 @@
           "Open the demo from the menu.",
           "Choose one of the suggested questions, or type your own in the box at the bottom and press Enter.",
           "Read the answer, then select a citation number to see the passage it relies on.",
-          "Ask another question in the same conversation, or start again with New chat. Each question is answered on its own, so write it in full."
+          "Ask a follow-up in the same conversation, or start again with New chat. A follow-up can refer to the last few questions, such as \"and what about the second one?\""
         ]
       },
       "asking": {
@@ -661,7 +661,7 @@
         "points": [
           "Why did it cite the English document when I asked in Hebrew, or the other way round? In the demo every document exists in both languages with the same content, and either edition can support the answer.",
           "Can it answer from two documents at once? Yes. Each statement cites its own source.",
-          "Does it remember earlier questions? No. Each question is answered on its own, even inside one conversation, so write every question in full.",
+          "Does it remember earlier questions? Yes, the last three questions of the same conversation, so a follow-up such as \"and what about the second one?\" works. The answer still comes only from your documents, with citations. A new chat starts from nothing.",
           "Why was my question refused? Either the documents do not cover it, or a demo limit was reached. The message says which."
         ]
       }

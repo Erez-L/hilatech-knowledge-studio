@@ -192,6 +192,13 @@ export class BedrockCohereEmbeddings implements EmbeddingsProvider {
     return vector;
   }
 
+  /** Several questions in one request (a follow-up and its context): one call, priced per token. */
+  async embedQueries(texts: string[], signal?: AbortSignal): Promise<number[][]> {
+    if (texts.length === 0) return [];
+    if (texts.length > COHERE_MAX_TEXTS) throw new AppError("embedding_failed", "Too many queries in one request");
+    return this.invoke(texts, "search_query", signal);
+  }
+
   private async invoke(texts: string[], inputType: "search_document" | "search_query", signal?: AbortSignal) {
     const tooLong = texts.findIndex((text) => text.length > COHERE_MAX_CHARS);
     if (tooLong !== -1) {
