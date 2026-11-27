@@ -56,14 +56,16 @@ describe("follow-up questions", () => {
     expect(clipped).toContain("question 4"); // the most recent earlier question is kept first
   });
 
-  it("drops earlier questions until the query fits the embedding model's token limit", async () => {
-    const { estimateCohereTokens } = await import("../src/providers/bedrock.ts");
-    // Hebrew needs far more tokens per character, so 1,500 characters can exceed Cohere's 512.
-    const hebrew = Array.from({ length: 3 }, (_, i) => ({ question: `שאלה ${i} ${"מה דעתך על המסמך הזה ".repeat(18)}`, answer: null }));
-    const fits = (text: string) => estimateCohereTokens(text) <= 512;
-    expect(fits(historyQuery("ומה לגבי השני?", hebrew)!)).toBe(false);
-    const query = historyQuery("ומה לגבי השני?", hebrew, fits);
-    expect(query === null || fits(query)).toBe(true);
+  it("drops earlier questions until the query fits the embedding model's token limit", () => {
+    // A stand-in limit: the query may hold at most 700 characters, well inside the 1,500-character cap.
+    const earlier = Array.from({ length: 3 }, (_, i) => ({ question: `question ${i} ${"word ".repeat(60)}`, answer: null }));
+    const fits = (text: string) => text.length <= 700;
+    expect(fits(historyQuery("and the second?", earlier)!)).toBe(false);
+    const query = historyQuery("and the second?", earlier, fits)!;
+    expect(fits(query)).toBe(true);
+    expect(query).toContain("question 2"); // the most recent earlier question is kept
+    expect(query).not.toContain("question 0");
+    expect(historyQuery("and the second?", earlier, () => false)).toBeNull(); // nothing fits: plain query only
   });
 
   it("makes a vague follow-up find the passage about its subject (lexical test double)", async () => {
