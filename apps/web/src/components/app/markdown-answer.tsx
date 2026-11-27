@@ -76,7 +76,7 @@ export function MarkdownAnswer({ content, numbers, activeLabel, onCite, citation
     const heading = line.match(/^\s*(#{1,6})\s+(.*)$/);
     if (heading) {
       blocks.push(
-        <h4 key={key} className="mt-1 text-[1.0625rem] font-bold tracking-(--tracking-heading)">
+        <h4 key={key} dir="auto" className="mt-1 text-[1.0625rem] font-bold tracking-(--tracking-heading)">
           {inline(heading[2]!)}
         </h4>,
       );
@@ -94,7 +94,7 @@ export function MarkdownAnswer({ content, numbers, activeLabel, onCite, citation
             <thead>
               <tr className="bg-sunken">
                 {head.map((cell, c) => (
-                  <th key={c} scope="col" className="px-4 py-2.5 text-start font-semibold">
+                  <th key={c} scope="col" dir="auto" className="px-4 py-2.5 text-start font-semibold">
                     {inline(cell)}
                   </th>
                 ))}
@@ -104,7 +104,7 @@ export function MarkdownAnswer({ content, numbers, activeLabel, onCite, citation
               {rows.map((row, r) => (
                 <tr key={r} className="border-t border-border">
                   {row.map((cell, c) => (
-                    <td key={c} className={cn("px-4 py-2.5 text-start align-top", c === 0 && "font-medium text-secondary")}>
+                    <td key={c} dir="auto" className={cn("px-4 py-2.5 text-start align-top", c === 0 && "font-medium text-secondary")}>
                       {inline(cell)}
                     </td>
                   ))}
@@ -131,7 +131,7 @@ export function MarkdownAnswer({ content, numbers, activeLabel, onCite, citation
       blocks.push(
         <List key={key} className="flex flex-col gap-2.5">
           {items.map((item, n) => (
-            <li key={n} value={item.number ? Number(item.number) : undefined} className={cn("relative", ordered ? "ps-8" : "ps-6")}>
+            <li key={n} dir="auto" value={item.number ? Number(item.number) : undefined} className={cn("relative", ordered ? "ps-8" : "ps-6")}>
               {ordered ? (
                 <span aria-hidden className="type-meta absolute start-0 top-[0.3em] text-tertiary">
                   {item.number}.
@@ -151,11 +151,18 @@ export function MarkdownAnswer({ content, numbers, activeLabel, onCite, citation
       paragraph.push(lines[i++]!);
     }
     if (paragraph.length === 0) paragraph.push(lines[i++]!); // a lone table-like line: show it as text
-    blocks.push(<p key={key}>{inline(paragraph.join(" "))}</p>);
+    blocks.push(
+      <p key={key} dir="auto">
+        {inline(paragraph.join(" "))}
+      </p>,
+    );
   }
 
+  // Each block takes its direction from its own first words (dir="auto" per block), so a Hebrew
+  // paragraph after an English one, or one that starts with an English name, still reads right to left.
+  // The wrapper keeps the page's direction for the layout of tables and lists.
   return (
-    <div dir="auto" className={cn("flex flex-col gap-4 text-body leading-(--leading-body) [overflow-wrap:anywhere]", className)}>
+    <div className={cn("flex flex-col gap-4 text-body leading-(--leading-body) [overflow-wrap:anywhere]", className)}>
       {blocks}
     </div>
   );

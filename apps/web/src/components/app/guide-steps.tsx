@@ -19,12 +19,14 @@ const STEPS = [
  */
 export function GuideSteps({ className, compact = false }: { className?: string; compact?: boolean }) {
   const t = useTranslations("app.guide");
+  const tn = useTranslations("app.nav");
   return (
     <section aria-labelledby="guide-steps-title" className={cn("rounded-panel border border-border bg-surface p-5 sm:p-6", className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id="guide-steps-title" className="text-[1.0625rem] font-bold">{t("title")}</h2>
-        <Link href="/help" className="text-small font-semibold text-foreground underline underline-offset-4 hover:no-underline">
+        <Link href="/help" target="_blank" rel="noopener" className="text-small font-semibold text-foreground underline underline-offset-4 hover:no-underline">
           {t("more")}
+          <span className="sr-only"> {tn("newTab")}</span>
         </Link>
       </div>
       <ol className={cn("mt-4 grid gap-3", compact ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-5")}>

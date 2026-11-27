@@ -205,13 +205,12 @@ function DocumentView({
             <p className="type-meta text-secondary" aria-live="polite">
               {pageLabel(page ?? 1, pageCount)}
             </p>
-            <div role="tablist" aria-label={t("title")} className="flex rounded-control border border-border bg-surface p-0.5">
+            <div role="group" aria-label={t("title")} className="flex rounded-control border border-border bg-surface p-0.5">
               {(["text", "image"] as const).map((value) => (
                 <button
                   key={value}
                   type="button"
-                  role="tab"
-                  aria-selected={mode === value}
+                  aria-pressed={mode === value}
                   onClick={() => setMode(value)}
                   className={cn(
                     "rounded-[0.4rem] px-2.5 py-1 text-label font-semibold transition-colors",
@@ -277,16 +276,17 @@ function DocumentView({
             {visible.length === 0 ? (
               <p className="py-8 text-center text-small text-secondary">{t("noText")}</p>
             ) : (
-              <div dir="auto" className="flex flex-col gap-4 text-[0.9375rem] leading-[1.8] text-secondary [overflow-wrap:anywhere]">
+              <div className="flex flex-col gap-4 text-[0.9375rem] leading-[1.8] text-secondary [overflow-wrap:anywhere]">
                 {visible.map((chunk, index) => {
                   const text = withoutOverlap(visible[index - 1]?.text, chunk.text);
                   const cited = chunk.id === target.chunkId;
                   return (
                     <div key={chunk.id}>
                       {!isPdf && chunk.sectionPath?.length ? (
-                        <p className="type-meta mb-1.5 text-tertiary">{chunk.sectionPath.join(" › ")}</p>
+                        <p dir="auto" className="type-meta mb-1.5 text-tertiary">{chunk.sectionPath.join(" › ")}</p>
                       ) : null}
-                      <p className="whitespace-pre-line">
+                      {/* Each passage takes its own direction: an English passage must not turn a Hebrew one left to right. */}
+                      <p dir="auto" className="whitespace-pre-line">
                         {cited ? (
                           <mark ref={markRef} className="mark-evidence" data-active>
                             {text}

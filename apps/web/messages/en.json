@@ -304,7 +304,14 @@
       },
       "deleteConversation": "Delete conversation {title}",
       "untitled": "Untitled conversation",
-      "guide": "Guide"
+      "guide": "Guide",
+      "deleteConversationTitle": "Delete this conversation?",
+      "deleteConversationBody": "“{title}” and all of its answers will be deleted. This cannot be undone.",
+      "confirmDelete": "Delete",
+      "deleting": "Deleting…",
+      "cancel": "Cancel",
+      "deleteFailed": "The conversation could not be deleted. Try again.",
+      "newTab": "(opens in a new tab)"
     },
     "mode": {
       "sampleBadge": "Test double",
@@ -320,7 +327,10 @@
       "noDocsBody": "Your library is empty. Upload a PDF, Word or text file and ask once it is ready.",
       "goLibrary": "Open the library",
       "docsReady": "{count, plural, one {# document ready} other {# documents ready}}",
-      "docsProcessing": "{count, plural, one {# document is still being processed} other {# documents are still being processed}}"
+      "docsProcessing": "{count, plural, one {# document is still being processed} other {# documents are still being processed}}",
+      "loadFailedTitle": "The document list couldn't be loaded",
+      "loadFailedBody": "You can still ask. Check your connection and load it again.",
+      "reload": "Try again"
     },
     "chat": {
       "insufficient": "I couldn't find reliable information about that in the available documents.",
@@ -398,7 +408,6 @@
       },
       "pages": "{count, plural, one {# page} other {# pages}}",
       "passages": "{count, plural, one {# passage} other {# passages}}",
-      "open": "Open {title}",
       "retry": "Retry",
       "delete": "Delete",
       "deleteTitle": "Delete this document?",
@@ -436,12 +445,13 @@
       "dismiss": "Dismiss",
       "toastDeleted": "{title} was deleted.",
       "toastRetry": "{title} was queued again.",
-      "study": "Highlights and summary of {title}",
       "move": "Move {title} to another project",
       "moveTo": "Move to project",
       "toastMoved": "Moved {title} to {project}.",
       "moveDuplicate": "That project already has this file.",
-      "moveFailed": "The document could not be moved. Try again."
+      "moveFailed": "The document could not be moved. Try again.",
+      "view": "View",
+      "studyShort": "Mark and summarize"
     },
     "demo": {
       "suggestionsTitle": "Try one of these questions",
@@ -471,12 +481,18 @@
       "delete": "Delete the empty project {name}",
       "hint": "Each project has its own documents and conversations. A question is answered from the active project only.",
       "errors": {
-        "conflict": "That can't be done: the project still has documents, or the limit of projects was reached.",
         "validation": "Enter a name of up to 120 characters.",
         "forbidden": "Your role doesn't allow managing projects.",
         "rate_limited": "Too many new projects. Try again later.",
-        "internal": "Something went wrong. Try again."
-      }
+        "internal": "Something went wrong. Try again.",
+        "conflict_create": "You have reached the maximum number of projects.",
+        "conflict_delete": "This project still has documents, so it cannot be deleted."
+      },
+      "deleteTitle": "Delete this project?",
+      "deleteBody": "The project “{name}” will be deleted, with every conversation held in it, for everyone on the team. This cannot be undone.",
+      "confirmDelete": "Delete project",
+      "deleting": "Deleting…",
+      "cancel": "Cancel"
     },
     "scope": {
       "all": "Whole project · {total} documents",
@@ -511,7 +527,11 @@
         "rate_limited": "Too many summaries in a short time. Try again later.",
         "not_found": "This document isn't available.",
         "internal": "Something went wrong. Try again."
-      }
+      },
+      "againTitle": "Summarize again?",
+      "againBody": "The current summary will be replaced with a new one. Reading the whole document can take up to a minute and counts towards the daily usage limit.",
+      "againConfirm": "Summarize again",
+      "cancel": "Cancel"
     },
     "guide": {
       "title": "How to work here",
