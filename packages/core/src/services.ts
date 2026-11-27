@@ -9,6 +9,12 @@ export type IngestionJobData = {
   documentId: string;
   jobId: string;
   correlationId: string;
+  /**
+   * Indexes a document that is already Ready again (new extraction and chunking rules). The
+   * document stays Ready and keeps its old passages until the new ones replace them in one step;
+   * a failure leaves it as it was.
+   */
+  reindex?: boolean;
 };
 
 export interface JobQueue {

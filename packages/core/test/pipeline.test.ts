@@ -47,6 +47,7 @@ import {
   ingestDocument,
   isPermanentFailure,
   LocalFileStorage,
+  reindexDocument,
   retryIngestion,
   readSummary,
   summarizeDocument,
@@ -686,6 +687,67 @@ describe("scanned PDFs with a page reader", () => {
     const { document, error } = await ingestBytes({ ...withConfig({ OCR_MAX_PAGES: "1" }), pageReader: new DeterministicPageReader() }, t, "scan.pdf", await scannedPdf());
     expect(error).toBe("too_many_pages");
     expect(document.status).toBe("failed");
+  });
+});
+
+describe("re-indexing a stored document", () => {
+  it("replaces the passages with the current rules while the document stays ready, and old citations keep their excerpt", async () => {
+    const t = await tenant("reindex");
+    const text = "The loyalty discount for long-standing customers is seven percent. It applies from the third year of a contract.";
+    const { document } = await ingestInline(services, t, "loyalty.txt", text);
+    expect(document.status).toBe("ready");
+    const before = await withTenant(database.db, t.organizationId, (tx) => listDocumentChunks(tx, t, document.id));
+    const asked = await ask(t, "What is the loyalty discount for long-standing customers?");
+    expect(asked.done!.answerStatus).toBe("answered");
+    // Pretend the passages were made by older rules.
+    await withTenant(database.db, t.organizationId, (tx) =>
+      tx.execute(sql`update document_chunks set chunking_version = 'v2:old' where document_id = ${document.id}::uuid`),
+    );
+
+    const jobs: IngestionJobData[] = [];
+    const inline: Services = { ...services, queue: { enqueueIngestion: async (data) => void jobs.push(data) } };
+    await reindexDocument(inline, t, document.id, "reindex-test");
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ documentId: document.id, reindex: true });
+    // Still ready (and searchable) while the job waits.
+    expect((await withTenant(database.db, t.organizationId, (tx) => getDocument(tx, t, document.id)))!.status).toBe("ready");
+    await ingestDocument(inline, jobs[0]!, { attempt: 1, finalAttempt: true });
+
+    const after = await withTenant(database.db, t.organizationId, (tx) => listDocumentChunks(tx, t, document.id));
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.every((c) => c.chunkingVersion.startsWith("v3:"))).toBe(true);
+    expect(after.map((c) => c.id).some((id) => before.some((b) => b.id === id))).toBe(false);
+    expect((await withTenant(database.db, t.organizationId, (tx) => getDocument(tx, t, document.id)))!.status).toBe("ready");
+    // The earlier answer still shows what it cited.
+    const thread = await withTenant(database.db, t.organizationId, (tx) => listMessages(tx, t, asked.start!.conversationId));
+    expect(thread[1]!.citations[0]!.excerpt).toContain("seven percent");
+    expect(thread[1]!.citations[0]!.documentId).toBe(document.id);
+    // And the document is still found by a new question.
+    expect((await ask(t, "What is the loyalty discount for long-standing customers?")).done!.sources[0]!.documentId).toBe(document.id);
+  });
+
+  it("leaves the document ready with its passages when the re-index fails, and refuses a document that is not ready", async () => {
+    const t = await tenant("reindex-fail");
+    const { document } = await ingestInline(services, t, "notes.txt", "The archive room is open on Tuesdays from nine to noon.");
+    const before = await withTenant(database.db, t.organizationId, (tx) => listDocumentChunks(tx, t, document.id));
+    const broken = new DeterministicEmbeddings(1024);
+    broken.embedDocuments = async () => {
+      throw new Error("simulated outage");
+    };
+    const jobs: IngestionJobData[] = [];
+    const inline: Services = { ...services, embeddings: broken, queue: { enqueueIngestion: async (data) => void jobs.push(data) } };
+    await reindexDocument(inline, t, document.id, "reindex-fail");
+    await expect(ingestDocument(inline, jobs[0]!, { attempt: 3, finalAttempt: true })).rejects.toBeTruthy();
+    const stored = await withTenant(database.db, t.organizationId, (tx) => getDocument(tx, t, document.id));
+    expect(stored).toMatchObject({ status: "ready", failureCode: null });
+    const after = await withTenant(database.db, t.organizationId, (tx) => listDocumentChunks(tx, t, document.id));
+    expect(after.map((c) => c.id)).toEqual(before.map((c) => c.id));
+    const job = await withTenant(database.db, t.organizationId, (tx) => latestIngestionJob(tx, t, document.id));
+    expect(job).toMatchObject({ status: "failed", errorCode: "embedding_failed" });
+
+    await withTenant(database.db, t.organizationId, (tx) => tx.execute(sql`update documents set status = 'failed' where id = ${document.id}::uuid`));
+    expect(await codeOf(reindexDocument(inline, t, document.id, "c"))).toBe("conflict");
+    expect(await codeOf(reindexDocument(inline, b, document.id, "c"))).toBe("not_found");
   });
 });
 

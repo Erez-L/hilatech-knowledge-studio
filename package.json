@@ -20,7 +20,8 @@
     "services:stop": "bash scripts/dev-services.sh stop",
     "demo:seed": "tsx scripts/seed-demo.mts",
     "evaluate": "tsx scripts/evaluate.mts",
-    "check:readiness": "tsx scripts/check-readiness.mts"
+    "check:readiness": "tsx scripts/check-readiness.mts",
+    "reindex": "tsx scripts/reindex-documents.mts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

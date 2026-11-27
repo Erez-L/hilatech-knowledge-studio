@@ -1,7 +1,18 @@
 import type { ExtractedBlock } from "../extraction/types.ts";
 import { estimateTokens, normalizeForSearch } from "./normalize.ts";
 
-export type ChunkOptions = { targetChars: number; maxChars: number; overlapChars: number };
+export type ChunkOptions = {
+  targetChars: number;
+  maxChars: number;
+  overlapChars: number;
+  /**
+   * The embedding model's token limit per text, with its estimate. When given, chunks are packed
+   * so that each one fits, instead of being cut afterwards: a chunk of Hebrew (more tokens per
+   * character than English) then ends at a paragraph or sentence and still shares its overlap with
+   * the next one.
+   */
+  tokens?: { max: number; estimate: (text: string) => number };
+};
 
 export type Chunk = {
   chunkIndex: number;
@@ -16,7 +27,9 @@ export type Chunk = {
 
 type Unit = { text: string; page: number | null; section: string[] | null };
 
-export const chunkingVersion = (o: ChunkOptions) => `v2:${o.targetChars}/${o.maxChars}/${o.overlapChars}`;
+/** v3: PDF words are spaced by position, and chunks are packed to the token limit when one is given. */
+export const chunkingVersion = (o: ChunkOptions) =>
+  `v3:${o.targetChars}/${o.maxChars}/${o.overlapChars}${o.tokens ? `/t${o.tokens.max}` : ""}`;
 
 /**
  * Structure-aware chunking.
@@ -32,19 +45,34 @@ export const chunkingVersion = (o: ChunkOptions) => `v2:${o.targetChars}/${o.max
  *   still retrievable. Overlap never crosses a page, which keeps citations exact.
  * - Page numbers are carried from extraction. `pageEnd` is kept for stored
  *   chunks of earlier versions and is always null here.
+ * - With `tokens`, the same rules hold in tokens as well: a unit is at most the same share of
+ *   the token limit that `targetChars` is of `maxChars`, a chunk closes before it would pass the
+ *   limit, and the overlap is carried only when it still fits.
  */
 export function chunkBlocks(blocks: ExtractedBlock[], options: ChunkOptions): Chunk[] {
   if (options.overlapChars > options.maxChars - options.targetChars) {
     throw new Error("overlapChars must not exceed maxChars - targetChars");
   }
   // Units are at most targetChars long, so a unit plus the carried overlap always fits in maxChars.
-  const units = blocks.flatMap((block) => toUnits(block, options.targetChars));
+  // With a token limit, a unit is also at most the same share of it, leaving room for the overlap.
+  const tokens = options.tokens;
+  const unitTokens = tokens ? Math.max(1, Math.floor((tokens.max * options.targetChars) / options.maxChars)) : Infinity;
+  const units = blocks
+    .flatMap((block) => toUnits(block, options.targetChars))
+    .flatMap((unit) =>
+      tokens && tokens.estimate(unit.text) > unitTokens
+        ? splitTextToFit(unit.text, (text) => tokens.estimate(text) <= unitTokens).map((text) => ({ ...unit, text }))
+        : [unit],
+    );
   const version = chunkingVersion(options);
   const chunks: Chunk[] = [];
   let current: Unit[] = [];
   let carried = null as Unit | null; // overlap text from the previous chunk
 
   const length = () => current.reduce((sum, unit) => sum + unit.text.length + 2, carried ? carried.text.length + 2 : 0);
+  const joined = (parts: Unit[]) => parts.map((unit) => unit.text).join("\n\n");
+  /** True when these units, joined as a chunk, would pass the token limit. */
+  const overTokens = (parts: Unit[]) => Boolean(tokens && tokens.estimate(joined(parts)) > tokens.max);
 
   const flush = (allowOverlap: boolean) => {
     if (current.length === 0) return;
@@ -72,11 +100,13 @@ export function chunkBlocks(blocks: ExtractedBlock[], options: ChunkOptions): Ch
     const pageChanged = current.length > 0 && current[0]!.page !== unit.page;
     if (sectionChanged || pageChanged) flush(false);
     else if (current.length > 0 && length() + unit.text.length > options.targetChars) flush(true);
+    else if (current.length > 0 && overTokens([...(carried ? [carried] : []), ...current, unit])) flush(true);
     // The carried overlap must never push a chunk past the hard limit.
     if (carried && carried.text.length + 2 + unit.text.length > options.maxChars) carried = null;
     if (carried && !sameSection(carried.section, unit.section)) carried = null;
     // Overlap never crosses a page: a chunk's page number must describe all of its text start.
     if (carried && carried.page !== unit.page) carried = null;
+    if (carried && current.length === 0 && overTokens([carried, unit])) carried = null;
     current.push(unit);
   }
   flush(false);
@@ -148,12 +178,23 @@ function trailingSentences(text: string, maxChars: number): string {
  */
 export function splitChunkToFit(chunk: Chunk, fits: (text: string) => boolean, minChars = 40): Chunk[] {
   if (fits(chunk.text) || chunk.text.length <= minChars) return [chunk];
-  const half = Math.ceil(chunk.text.length / 2);
-  const pieces = splitLong(chunk.text, Math.max(minChars, half));
+  return splitTextToFit(chunk.text, fits, minChars).map((text) => ({
+    ...chunk, text, searchText: normalizeForSearch(text), tokenEstimate: estimateTokens(text),
+  }));
+}
+
+/**
+ * Splits a text into pieces that each satisfy `fits`, halving at sentence ends where possible and
+ * at whitespace otherwise. Pieces are trimmed and together contain all of the text.
+ */
+export function splitTextToFit(text: string, fits: (text: string) => boolean, minChars = 40): string[] {
+  if (fits(text) || text.length <= minChars) return [text];
+  const half = Math.ceil(text.length / 2);
+  const pieces = splitLong(text, Math.max(minChars, half));
   // A text with no usable break (returned whole) is cut in the middle.
-  const parts = pieces.length > 1 ? pieces : [chunk.text.slice(0, half), chunk.text.slice(half)];
+  const parts = pieces.length > 1 ? pieces : [text.slice(0, half), text.slice(half)];
   return parts
-    .map((text) => text.trim())
+    .map((piece) => piece.trim())
     .filter(Boolean)
-    .flatMap((text) => splitChunkToFit({ ...chunk, text, searchText: normalizeForSearch(text), tokenEstimate: estimateTokens(text) }, fits, minChars));
+    .flatMap((piece) => splitTextToFit(piece, fits, minChars));
 }
