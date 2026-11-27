@@ -19,6 +19,8 @@ export const ERROR_CODES = [
   "provider_not_configured",
   "provider_error",
   "not_configured",
+  /** The job queue did not accept work; nothing was lost and the action can be retried. */
+  "queue_unavailable",
   "internal",
 ] as const;
 
@@ -44,6 +46,7 @@ const STATUS: Record<ErrorCode, number> = {
   provider_not_configured: 503,
   provider_error: 502,
   not_configured: 503,
+  queue_unavailable: 503,
   internal: 500,
 };
 

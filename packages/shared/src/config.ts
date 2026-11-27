@@ -103,6 +103,12 @@ const schema = z.object({
   // The worker rewrites this file while it is alive; its container health check reads the age.
   // Default: hks-worker-heartbeat in the system's temporary directory.
   WORKER_HEARTBEAT_FILE: z.string().min(1).optional(),
+  // Documents one worker process indexes at the same time. Each holds a whole file, its text and,
+  // for scans, page images in memory: raise it only with the memory to match.
+  WORKER_CONCURRENCY: int(2, 1).pipe(z.number().max(16)),
+  // A document still queued or processing whose job has not moved for this long is marked failed
+  // (and can be retried), unless the queue still holds its job. Checked every few minutes.
+  INGESTION_STUCK_MINUTES: int(30, 5),
 });
 
 export type Config = Readonly<z.output<typeof schema>> & {
