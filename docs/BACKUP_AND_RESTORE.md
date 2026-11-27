@@ -16,7 +16,7 @@ steps under "Install" are done once, by hand, on the server.
 | PostgreSQL database `hks` | volume `postgres-data` | Yes |
 | Uploaded files | the S3 bucket in `S3_BUCKET` | No. They are already in S3. Turn on bucket versioning to protect them from deletion |
 | Redis (job queue, rate limits, sign-ups waiting for confirmation) | volume `redis-data` | No. It is rebuilt; a sign-up that was waiting has to be started again |
-| `/opt/knowledge-studio/.env` (passwords, `AUTH_SECRET`) | the server only | No. Keep a copy in a password manager. A restored database is useless without the role passwords, and sessions need `AUTH_SECRET` |
+| `/opt/knowledge-studio/.env`, `postgres.env` and `migrate.env` (passwords, `AUTH_SECRET`) | the server only | No. Keep a copy of all three in a password manager. A restored database is useless without the role passwords, and sessions need `AUTH_SECRET`. A host that has not split them yet keeps everything in `.env` |
 
 ## Install (once, on the server)
 
@@ -129,8 +129,11 @@ taken is lost. Read the whole procedure first.
 
 ### On a new server (the old one is gone)
 
-Set the server up as in `docs/DEPLOYMENT_SINGLE_HOST.md` with the saved `.env`, start only the
-database (`c up -d ks-postgres`; this creates the roles with the passwords from `.env`), then do
+Set the server up as in `docs/DEPLOYMENT_SINGLE_HOST.md` with the saved `.env`, `postgres.env`
+and `migrate.env`. `ks-postgres` reads the role passwords only from `postgres.env` (`POSTGRES_PASSWORD`,
+`HKS_OWNER_PASSWORD`, `HKS_APP_PASSWORD`, formats in `env.example`); if you saved only an older `.env`,
+create `postgres.env` and `migrate.env` from its values first, or the database will not initialise.
+Start only the database (`c up -d ks-postgres`; this creates the roles with those passwords), then do
 steps 3 to 7 above. Documents whose files are in S3 open as before; the bucket is not part of
 the server.
 
