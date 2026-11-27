@@ -1,7 +1,7 @@
 name: Build image
 # Builds the application image and pushes it to GitHub Container Registry.
 # Runs for a version tag (v0.1.0) or by hand. It does not deploy.
-# The checks in ci.yml run first; the image is built only when they pass.
+# Every job in ci.yml runs first (checks, database and HTTP suites); the image is built only when all pass.
 on:
   push:
     tags: ["v*"]
