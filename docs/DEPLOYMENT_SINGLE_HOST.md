@@ -14,7 +14,25 @@ How the public demo at https://knowledge.hilatechdev.com is deployed. First done
 | DNS | Cloudflare, zone `hilatechdev.com`: A record `knowledge` to `98.91.94.108`, DNS only (not proxied), like `demosaas` |
 | Image | `ghcr.io/erez-l/hilatech-knowledge-studio/app:<tag>`, built by `.github/workflows/build-image.yml` when a release with tag `v*` is published |
 | AWS identity | The instance role `hilatech-demo-server`. Its existing policy allows Bedrock; the inline policy `knowledge-studio-s3` allows the bucket `hilatech-knowledge-studio-docs-590184083649` |
-| Secrets | `/opt/knowledge-studio/.env`, mode 600, generated on the host. Database passwords and `AUTH_SECRET` exist nowhere else |
+| Secrets | `/opt/knowledge-studio/.env`, `postgres.env` and `migrate.env`, mode 600, generated on the host. Database passwords and `AUTH_SECRET` exist nowhere else. See "Database roles and secrets" |
+
+## Database roles and secrets
+
+Three database roles, each given only to what needs it:
+
+| Role | Used by | Where its credentials live |
+|---|---|---|
+| `postgres` (superuser) | the database container itself, backups (`pg_dump` over the local socket, no password) | `postgres.env` as `POSTGRES_PASSWORD`, read only when the data volume is first created |
+| `hks_owner` (owns the tables) | the one-shot `migrate` job | `migrate.env` as `DATABASE_MIGRATION_URL`; its password also in `postgres.env` as `HKS_OWNER_PASSWORD` |
+| `hks_app` (subject to row level security) | `ks-web` and `ks-worker` | `.env` as `DATABASE_URL`; its password also in `postgres.env` as `HKS_APP_PASSWORD` |
+
+`.env` is the environment of the web and worker containers, so it must hold neither the superuser password nor the owner URL. Row level security is forced on the tenant tables (migration 0006), so even the owner role sees a tenant's rows only after setting `app.organization_id`, as the application does; the superuser bypasses it, which backups rely on. The audit trail (`audit_events`) is the exception: the owner role can still read all of it.
+
+`docker-compose.prod.yml` reads `postgres.env` and `migrate.env` when they exist, so a host that still keeps these values in `.env` keeps working. To move them on an existing host (a server change, not done by a deploy):
+
+1. Create `postgres.env` and `migrate.env` beside `.env` (formats in `env.example`), mode 600, with the values now in `.env`.
+2. Remove `POSTGRES_SUPERUSER_PASSWORD`, `HKS_OWNER_PASSWORD`, `HKS_APP_PASSWORD` and `DATABASE_MIGRATION_URL` from `.env`, and check that `DATABASE_URL` names `hks_app`.
+3. Deploy (`./deploy.sh <tag>`), then confirm by name only that the web container has no `DATABASE_MIGRATION_URL`: `docker exec knowledge-studio-ks-web-1 sh -c 'env | cut -d= -f1 | grep -c MIGRATION'` prints 0.
 
 ## Two things that are easy to get wrong
 

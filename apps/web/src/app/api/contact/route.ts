@@ -6,6 +6,7 @@ import { contactSchema, fieldErrors, type ContactResponse } from "@/lib/contact"
 import { clientIp } from "@/lib/client-ip";
 import { getLeadStore } from "@/lib/lead-store";
 import { MemoryRateLimiter } from "@/lib/rate-limit";
+import { readTextBody } from "@/server/body";
 
 export const runtime = "nodejs";
 
@@ -66,8 +67,12 @@ export async function POST(request: Request) {
     });
   }
 
-  const raw = await request.text();
-  if (raw.length > MAX_BODY_BYTES) return fail("bad_request", 413);
+  let raw: string;
+  try {
+    raw = await readTextBody(request, MAX_BODY_BYTES);
+  } catch {
+    return fail("bad_request", 413);
+  }
 
   let json: unknown;
   try {

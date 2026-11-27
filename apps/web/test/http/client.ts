@@ -131,12 +131,21 @@ export async function waitForDocument(client: Client, id: string, timeoutMs = 25
   }
 }
 
-/** Owner-role connection, for assertions and for arranging states the API cannot (expired sessions, disabled users). */
-export async function ownerQuery<T extends pg.QueryResultRow = any>(text: string, values: unknown[] = []) {
+/**
+ * Owner-role connection, for assertions and for arranging states the API cannot (expired sessions,
+ * disabled users). Row level security applies to the owner role too (FORCE), so reading a tenant
+ * table needs `organizationId`: the query then runs with that organization set, as the application does.
+ */
+export async function ownerQuery<T extends pg.QueryResultRow = any>(text: string, values: unknown[] = [], options: { organizationId?: string } = {}) {
   const client = new pg.Client({ connectionString: process.env.DATABASE_MIGRATION_URL });
   await client.connect();
   try {
-    return (await client.query<T>(text, values)).rows;
+    if (!options.organizationId) return (await client.query<T>(text, values)).rows;
+    await client.query("begin");
+    await client.query("select set_config('app.organization_id', $1, true)", [options.organizationId]);
+    const rows = (await client.query<T>(text, values)).rows;
+    await client.query("commit");
+    return rows;
   } finally {
     await client.end();
   }

@@ -28,7 +28,7 @@ function build() {
     }),
     advanced: {
       database: { generateId: "uuid" },
-      useSecureCookies: config.APP_ENV === "production" || config.APP_BASE_URL.startsWith("https://"),
+      useSecureCookies: config.APP_ENV === "production" || config.APP_ENV === "demo" || config.APP_BASE_URL.startsWith("https://"),
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
     user: {

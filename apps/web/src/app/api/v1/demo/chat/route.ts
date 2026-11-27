@@ -4,6 +4,7 @@ import { chatEventStream, chatRequestSchema } from "@/server/chat-stream";
 import { requireDemoContext } from "@/server/demo";
 import { enforceRateLimit, rateKeyFor, route } from "@/server/http";
 import { getServices } from "@/server/services";
+import { readTextBody } from "@/server/body";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -20,8 +21,7 @@ export const POST = route(async ({ request, requestId }) => {
   const { config, db, limiter } = services;
   if (!services.chat || !services.embeddings) throw new AppError("provider_not_configured", "Answering is not configured");
 
-  const raw = await request.text();
-  if (raw.length > 16 * 1024) throw new AppError("payload_too_large");
+  const raw = await readTextBody(request, 16 * 1024);
   let body: unknown;
   try {
     body = JSON.parse(raw);
