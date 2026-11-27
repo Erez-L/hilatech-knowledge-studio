@@ -176,12 +176,24 @@ async function* answerWithinBudget(
   // 2. Retrieval, scoped to this workspace. A follow-up question runs a second query that also
   // carries the earlier questions, so "and the second one?" still finds the passages it is about.
   let candidates: RetrievedChunk[];
-  const contextQuery = historyQuery(question, history);
+  const fitsEmbedding = (text: string) =>
+    !embeddings.estimateTokens || !embeddings.maxTokensPerText || embeddings.estimateTokens(text) <= embeddings.maxTokensPerText;
+  const contextQuery = historyQuery(question, history, fitsEmbedding);
   const queryTokens = budget.question + (contextQuery ? estimateTokens(contextQuery) : 0);
   try {
     // The query embedding(s), in one request when the provider supports it.
     spend.inputTokens = queryTokens;
-    const [queryVector, contextVector] = await embedQuestions(embeddings, contextQuery ? [question, contextQuery] : [question], input.signal);
+    let queryVector: number[] | undefined;
+    let contextVector: number[] | undefined;
+    try {
+      [queryVector, contextVector] = await embedQuestions(embeddings, contextQuery ? [question, contextQuery] : [question], input.signal);
+    } catch (error) {
+      // The history query is a bonus: if embedding it fails, answer from the question alone.
+      if (!contextQuery || input.signal?.aborted) throw error;
+      log("warn", "answer.history_query_failed", { correlationId: input.correlationId, code: isAppError(error) ? error.code : "internal" });
+      [queryVector] = await embedQuestions(embeddings, [question], input.signal);
+      contextVector = undefined;
+    }
     candidates = await withTenant(db, ctx.organizationId, async (tx) => {
       await recordUsage(tx, {
         ...usageBase, kind: "query_embedding", provider: embeddings.descriptor.provider,

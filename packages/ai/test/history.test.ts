@@ -56,6 +56,16 @@ describe("follow-up questions", () => {
     expect(clipped).toContain("question 4"); // the most recent earlier question is kept first
   });
 
+  it("drops earlier questions until the query fits the embedding model's token limit", async () => {
+    const { estimateCohereTokens } = await import("../src/providers/bedrock.ts");
+    // Hebrew needs far more tokens per character, so 1,500 characters can exceed Cohere's 512.
+    const hebrew = Array.from({ length: 3 }, (_, i) => ({ question: `שאלה ${i} ${"מה דעתך על המסמך הזה ".repeat(18)}`, answer: null }));
+    const fits = (text: string) => estimateCohereTokens(text) <= 512;
+    expect(fits(historyQuery("ומה לגבי השני?", hebrew)!)).toBe(false);
+    const query = historyQuery("ומה לגבי השני?", hebrew, fits);
+    expect(query === null || fits(query)).toBe(true);
+  });
+
   it("makes a vague follow-up find the passage about its subject (lexical test double)", async () => {
     const embeddings = new DeterministicEmbeddings(256);
     const [plans, holiday] = await embeddings.embedDocuments([

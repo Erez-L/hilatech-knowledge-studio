@@ -30,13 +30,19 @@ const clip = (text: string, max: number) => {
  * passages already shown, while the questions carry the subject. Returns null when there is no
  * history, so the caller runs only the plain query.
  */
-export function historyQuery(question: string, history: HistoryTurn[]): string | null {
+export function historyQuery(
+  question: string,
+  history: HistoryTurn[],
+  fits: (text: string) => boolean = () => true,
+): string | null {
   const earlier = history.map((turn) => clip(turn.question, MAX_QUESTION_CHARS)).filter(Boolean);
   if (earlier.length === 0) return null;
   const current = clip(question, HISTORY_QUERY_MAX_CHARS);
   const parts = [...earlier, current];
-  // Drop the oldest questions first until the query fits.
-  while (parts.length > 1 && parts.join("\n").length > HISTORY_QUERY_MAX_CHARS) parts.shift();
+  // Drop the oldest questions first until the query fits, in characters and in the embedding
+  // model's token limit (Hebrew needs far more tokens per character than English).
+  const tooLong = () => parts.join("\n").length > HISTORY_QUERY_MAX_CHARS || !fits(parts.join("\n"));
+  while (parts.length > 1 && tooLong()) parts.shift();
   return parts.length > 1 ? parts.join("\n") : null;
 }
 
