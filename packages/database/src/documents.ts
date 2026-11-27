@@ -7,6 +7,7 @@ import {
   documentSummaries,
   documents,
   ingestionJobs,
+  workspaces,
   type DocumentStatus,
   type FileType,
 } from "./schema.ts";
@@ -44,6 +45,26 @@ export async function createDocument(
 export async function getDocument(tx: Executor, ctx: TenantContext, documentId: string): Promise<DocumentRow | null> {
   const [row] = await tx.select().from(documents).where(and(scope(ctx), eq(documents.id, documentId))).limit(1);
   return row ?? null;
+}
+
+/**
+ * A document of the organization in whichever project it is now, with that project. For reading a
+ * cited document after it was moved to another project: every member of an organization may open
+ * any of its projects, so this is the same tenant rule, applied at organization level. Changes to
+ * a document stay scoped to the active project (getDocument).
+ */
+export async function findDocumentInOrganization(
+  tx: Executor,
+  organizationId: string,
+  documentId: string,
+): Promise<{ document: DocumentRow; project: { id: string; name: string } } | null> {
+  const [row] = await tx
+    .select({ document: documents, projectId: workspaces.id, projectName: workspaces.name })
+    .from(documents)
+    .innerJoin(workspaces, and(eq(workspaces.id, documents.workspaceId), eq(workspaces.organizationId, documents.organizationId)))
+    .where(and(eq(documents.organizationId, organizationId), eq(documents.id, documentId)))
+    .limit(1);
+  return row ? { document: row.document, project: { id: row.projectId, name: row.projectName } } : null;
 }
 
 export async function listDocuments(

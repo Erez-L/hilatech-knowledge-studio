@@ -86,6 +86,8 @@ export type DocumentContent = {
   document: { id: string; title: string; fileType: string; pageCount: number | null; status: string };
   page: number | null;
   chunks: { id: string; index: number; pageNumber: number | null; pageEnd: number | null; sectionPath: string[] | null; text: string }[];
+  /** Set when the document is now in another project of the organization than the active one. */
+  movedTo?: { id: string; name: string } | null;
 };
 
 export type SummaryView = {

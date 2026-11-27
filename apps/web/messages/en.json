@@ -367,7 +367,8 @@
       "pageImageAlt": "Page {n} of {title}",
       "note": "The highlighted passage is quoted from the document. The answer in the conversation is a summary of it.",
       "previous": "Previous page",
-      "next": "Next page"
+      "next": "Next page",
+      "movedNote": "This document has moved to the project “{project}”. The citation opens it from there."
     },
     "library": {
       "title": "Library",
